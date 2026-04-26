@@ -28,7 +28,7 @@ export function Header() {
         <div className="flex items-center gap-10">
           <Link to="/" className="flex items-center gap-2.5">
             <Logo className="h-7 w-7" />
-            <span className="font-display text-lg tracking-tight">SolanaPredict</span>
+            <span className="font-display text-lg tracking-tight">Heliora</span>
             <span className="hidden rounded-md border border-border bg-surface px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground sm:inline-block">
               Beta
             </span>

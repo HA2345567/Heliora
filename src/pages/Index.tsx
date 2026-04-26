@@ -188,7 +188,7 @@ export default function Landing() {
             </div>
             <div className="bg-foreground p-8 text-background">
               <div className="font-mono text-[11px] uppercase tracking-wider text-background/60">
-                SolanaPredict
+                Heliora
               </div>
               <div className="mt-3 font-display text-2xl">Built for both</div>
               <p className="mt-3 text-sm leading-relaxed text-background/80">
@@ -308,7 +308,7 @@ export default function Landing() {
               </div>
               <pre className="overflow-x-auto p-5 font-mono text-[12.5px] leading-6 text-foreground/90">
 {`import { SolanaAgentKit } from "solana-agent-kit";
-import { predictPlugin } from "@solanapredict/agent-kit";
+import { predictPlugin } from "@heliora/agent-kit";
 
 const agent = new SolanaAgentKit(wallet, RPC).use(predictPlugin);
 
@@ -348,7 +348,7 @@ agent.streamMarket(markets[0].id, (snap) => {
             </div>
             <div className="p-5 text-sm font-medium text-muted-foreground">Polymarket</div>
             <div className="p-5 text-sm font-medium text-muted-foreground">Kalshi</div>
-            <div className="p-5 text-sm font-semibold text-foreground">SolanaPredict</div>
+            <div className="p-5 text-sm font-semibold text-foreground">Heliora</div>
           </div>
           {COMPARISON.map((row, i) => (
             <div
