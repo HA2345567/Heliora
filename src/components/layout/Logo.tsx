@@ -1,5 +1,9 @@
 import { cn } from "@/lib/utils";
 
+/**
+ * Heliora logo — a minimalist sun/aperture mark.
+ * Concentric rings around a solid core, with a subtle Solana-green spark.
+ */
 export function Logo({ className }: { className?: string }) {
   return (
     <svg
@@ -9,12 +13,38 @@ export function Logo({ className }: { className?: string }) {
       className={cn("text-foreground", className)}
       aria-hidden
     >
-      <rect x="0.5" y="0.5" width="31" height="31" rx="8" stroke="currentColor" strokeOpacity="0.18" />
-      <path
-        d="M9 11.5L20.5 9 14 14.5l9 1.2-12.5 2.6L17 24l-9.5-3.4L9 11.5z"
-        fill="currentColor"
+      {/* Rounded square frame */}
+      <rect
+        x="0.5"
+        y="0.5"
+        width="31"
+        height="31"
+        rx="8"
+        stroke="currentColor"
+        strokeOpacity="0.18"
       />
-      <circle cx="24" cy="9" r="2.2" fill="hsl(var(--sol-green))" />
+      {/* Outer ring */}
+      <circle
+        cx="16"
+        cy="16"
+        r="9.25"
+        stroke="currentColor"
+        strokeOpacity="0.55"
+        strokeWidth="1.25"
+      />
+      {/* Inner ring */}
+      <circle
+        cx="16"
+        cy="16"
+        r="5.25"
+        stroke="currentColor"
+        strokeOpacity="0.85"
+        strokeWidth="1.25"
+      />
+      {/* Solid core */}
+      <circle cx="16" cy="16" r="2.25" fill="currentColor" />
+      {/* Accent spark */}
+      <circle cx="24.5" cy="7.5" r="1.75" fill="hsl(var(--sol-green))" />
     </svg>
   );
 }

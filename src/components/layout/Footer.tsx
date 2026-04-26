@@ -48,7 +48,7 @@ export function Footer() {
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center gap-2.5">
               <Logo className="h-8 w-8" />
-              <span className="font-display text-xl">SolanaPredict</span>
+              <span className="font-display text-xl">Heliora</span>
             </Link>
             <p className="mt-4 max-w-xs text-sm text-muted-foreground">
               The AI-native prediction market protocol. Permissionless, sub-second,
@@ -86,7 +86,7 @@ export function Footer() {
 
         <div className="mt-16 flex flex-col items-start justify-between gap-4 border-t border-border/60 pt-8 md:flex-row md:items-center">
           <div className="text-xs text-muted-foreground">
-            © 2026 SolanaPredict Labs. Permissionless protocol — use at your own risk.
+            © 2026 Heliora Labs. Permissionless protocol — use at your own risk.
           </div>
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <span className="font-mono">RPC: 99.99% · Latency: 312ms</span>

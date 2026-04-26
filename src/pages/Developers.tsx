@@ -15,13 +15,13 @@ const SNIPPETS: Record<string, { title: string; lang: string; code: string }[]> 
     {
       title: "Install",
       lang: "bash",
-      code: `npm i solana-agent-kit @solanapredict/agent-kit-plugin`,
+      code: `npm i solana-agent-kit @heliora/agent-kit-plugin`,
     },
     {
       title: "Use it",
       lang: "ts",
       code: `import { SolanaAgentKit } from "solana-agent-kit";
-import { predictPlugin } from "@solanapredict/agent-kit-plugin";
+import { predictPlugin } from "@heliora/agent-kit-plugin";
 
 const agent = new SolanaAgentKit(wallet, RPC).use(predictPlugin);
 
@@ -39,8 +39,8 @@ const tx = await agent.placeBet({
       lang: "json",
       code: `{
   "mcpServers": {
-    "solanapredict": {
-      "url": "https://mcp.solanapredict.xyz",
+    "heliora": {
+      "url": "https://mcp.heliora.xyz",
       "auth": "siws"
     }
   }
@@ -58,14 +58,14 @@ const tx = await agent.placeBet({
     {
       title: "Install",
       lang: "bash",
-      code: `npm i @solanapredict/sdk`,
+      code: `npm i @heliora/sdk`,
     },
     {
       title: "Browse + bet",
       lang: "ts",
-      code: `import { SolanaPredict } from "@solanapredict/sdk";
+      code: `import { Heliora } from "@heliora/sdk";
 
-const sp = new SolanaPredict({ rpc: "helius://..." });
+const sp = new Heliora({ rpc: "helius://..." });
 const live = await sp.markets.list({ live: true });
 
 const tx = await sp.bet({
@@ -134,7 +134,7 @@ export default function Developers() {
         <div className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-4">
           {[
             { icon: Bot, title: "Solana Agent Kit", body: "Official plugin for the de-facto standard with 60+ skills." },
-            { icon: Terminal, title: "MCP Server", body: "Hosted at mcp.solanapredict.xyz. Auth via SIWS." },
+            { icon: Terminal, title: "MCP Server", body: "Hosted at mcp.heliora.xyz. Auth via SIWS." },
             { icon: Plug, title: "TypeScript SDK", body: "Typed, retry-aware client for Node + browser." },
             { icon: Globe, title: "Webhooks", body: "Helius webhooks for resolution + price events." },
           ].map((c) => (
