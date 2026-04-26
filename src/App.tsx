@@ -4,6 +4,14 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
+import Markets from "./pages/Markets.tsx";
+import MarketDetail from "./pages/MarketDetail.tsx";
+import CreateMarket from "./pages/CreateMarket.tsx";
+import Portfolio from "./pages/Portfolio.tsx";
+import Agents from "./pages/Agents.tsx";
+import Oracle from "./pages/Oracle.tsx";
+import Developers from "./pages/Developers.tsx";
+import Token from "./pages/Token.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -16,7 +24,14 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/markets" element={<Markets />} />
+          <Route path="/markets/create" element={<CreateMarket />} />
+          <Route path="/markets/:id" element={<MarketDetail />} />
+          <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/agents" element={<Agents />} />
+          <Route path="/oracle" element={<Oracle />} />
+          <Route path="/developers" element={<Developers />} />
+          <Route path="/token" element={<Token />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
