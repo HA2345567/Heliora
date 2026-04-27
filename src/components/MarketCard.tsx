@@ -1,11 +1,19 @@
 import { Link } from "react-router-dom";
-import { Market, formatUsd, timeUntil } from "@/lib/mock-data";
 import { TrendingUp, TrendingDown, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatUsd, timeUntil } from "@/lib/api";
+import type { ApiMarket } from "@/lib/api-types";
 
-export function MarketCard({ market, compact = false }: { market: Market; compact?: boolean }) {
+export function MarketCard({
+  market,
+  compact = false,
+}: {
+  market: ApiMarket;
+  compact?: boolean;
+}) {
   const yesPct = Math.round(market.yesPrice * 100);
-  const trendUp = market.trend >= 0;
+  const trend = market.yesPrice - 0.5;
+  const trendUp = trend >= 0;
 
   return (
     <Link
@@ -28,11 +36,15 @@ export function MarketCard({ market, compact = false }: { market: Market; compac
         </div>
       </div>
 
-      <h3 className={cn("mt-4 font-display leading-snug text-foreground", compact ? "text-base" : "text-lg")}>
+      <h3
+        className={cn(
+          "mt-4 font-display leading-snug text-foreground",
+          compact ? "text-base" : "text-lg",
+        )}
+      >
         {market.question}
       </h3>
 
-      {/* Probability bar */}
       <div className="mt-5">
         <div className="flex items-baseline justify-between">
           <div className="flex items-baseline gap-2">
@@ -46,7 +58,7 @@ export function MarketCard({ market, compact = false }: { market: Market; compac
             )}
           >
             {trendUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {(market.trend * 100).toFixed(1)}%
+            {(trend * 100).toFixed(1)}%
           </div>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background">
@@ -63,13 +75,12 @@ export function MarketCard({ market, compact = false }: { market: Market; compac
         <span className="font-mono">{market.resolution}</span>
       </div>
 
-      {/* Quick bet buttons */}
       <div className="mt-4 grid grid-cols-2 gap-2 opacity-0 transition group-hover:opacity-100">
         <button className="rounded-md border border-border bg-background py-1.5 text-xs font-semibold text-foreground hover:bg-success/10 hover:border-success/40 hover:text-success">
-          Buy YES · {(market.yesPrice).toFixed(2)}
+          Buy YES · {market.yesPrice.toFixed(2)}
         </button>
         <button className="rounded-md border border-border bg-background py-1.5 text-xs font-semibold text-foreground hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive">
-          Buy NO · {(market.noPrice).toFixed(2)}
+          Buy NO · {market.noPrice.toFixed(2)}
         </button>
       </div>
     </Link>
