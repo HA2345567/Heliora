@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
 import { MarketCard } from "@/components/MarketCard";
-import { CATEGORIES, MARKETS, MarketCategory, formatUsd } from "@/lib/mock-data";
+import { api, formatUsd } from "@/lib/api";
+import type { MarketCategory } from "@/lib/api-types";
 import { Link } from "react-router-dom";
 import { ArrowUpDown, Filter, Plus, Search, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const CATEGORIES: MarketCategory[] = [
+  "Crypto", "Politics", "Sports", "Memes", "NFTs", "DeFi", "Social", "AI",
+];
 type Sort = "volume" | "ending" | "trending" | "newest";
 
 export default function Markets() {
@@ -14,23 +19,23 @@ export default function Markets() {
   const [sort, setSort] = useState<Sort>("volume");
   const [liveOnly, setLiveOnly] = useState(false);
 
-  const filtered = useMemo(() => {
-    let list = MARKETS.filter((m) => (cat === "All" ? true : m.category === cat));
-    if (liveOnly) list = list.filter((m) => m.isLive);
-    if (q.trim()) {
-      const s = q.toLowerCase();
-      list = list.filter((m) => m.question.toLowerCase().includes(s));
-    }
-    list = [...list].sort((a, b) => {
-      if (sort === "volume") return b.volume - a.volume;
-      if (sort === "ending") return new Date(a.endsAt).getTime() - new Date(b.endsAt).getTime();
-      if (sort === "trending") return Math.abs(b.trend) - Math.abs(a.trend);
-      return 0;
-    });
-    return list;
-  }, [q, cat, sort, liveOnly]);
+  const params = useMemo(
+    () => ({
+      category: cat === "All" ? undefined : cat,
+      live: liveOnly || undefined,
+      sort,
+      search: q.trim() || undefined,
+      take: 60,
+    }),
+    [cat, liveOnly, sort, q],
+  );
 
-  const totalVolume = MARKETS.reduce((s, m) => s + m.volume, 0);
+  const query = useQuery({
+    queryKey: ["markets", params],
+    queryFn: () => api.listMarkets(params),
+  });
+  const filtered = query.data?.markets ?? [];
+  const totalVolume = filtered.reduce((s, m) => s + m.volume, 0);
 
   return (
     <PageShell>
@@ -40,7 +45,7 @@ export default function Markets() {
             <div>
               <h1 className="font-display text-4xl tracking-tight">All markets</h1>
               <p className="mt-2 text-muted-foreground">
-                {filtered.length} markets · {formatUsd(totalVolume)} total volume across the protocol
+                {query.isLoading ? "Loading…" : `${filtered.length} markets · ${formatUsd(totalVolume)} visible volume`}
               </p>
             </div>
             <Link
@@ -53,7 +58,6 @@ export default function Markets() {
         </div>
       </section>
 
-      {/* Filters */}
       <section className="sticky top-16 z-30 border-b border-border/60 bg-background/85 backdrop-blur-xl">
         <div className="container flex flex-col gap-3 py-4 lg:flex-row lg:items-center">
           <div className="relative flex-1">
@@ -61,7 +65,7 @@ export default function Markets() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search 4,820 markets…"
+              placeholder="Search markets…"
               className="h-10 w-full rounded-md border border-border bg-surface pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
             />
           </div>
@@ -98,9 +102,19 @@ export default function Markets() {
         </div>
       </section>
 
-      {/* Grid */}
       <section className="container py-10">
-        {filtered.length === 0 ? (
+        {query.isLoading ? (
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} className="h-[260px] animate-shimmer rounded-xl border border-border bg-surface" />
+            ))}
+          </div>
+        ) : query.isError ? (
+          <div className="flex flex-col items-center rounded-2xl border border-dashed border-destructive/40 py-24 text-destructive">
+            <p className="text-sm">Failed to load markets. Is the backend running?</p>
+            <p className="mt-1 font-mono text-xs opacity-70">{(query.error as Error).message}</p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center rounded-2xl border border-dashed border-border py-24">
             <Filter className="h-6 w-6 text-muted-foreground" />
             <p className="mt-4 text-sm text-muted-foreground">No markets match these filters</p>

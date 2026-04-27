@@ -1,31 +1,35 @@
+import { useQuery } from "@tanstack/react-query";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { PageShell } from "@/components/layout/PageShell";
-import { MARKETS, formatUsd, timeUntil } from "@/lib/mock-data";
+import { api, formatUsd, timeUntil } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { ArrowDownRight, ArrowUpRight, Coins, Download, ExternalLink, Sparkles, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Coins, ExternalLink, Sparkles, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const POSITIONS = MARKETS.slice(0, 5).map((m, i) => {
-  const side: "YES" | "NO" = i % 2 === 0 ? "YES" : "NO";
-  const price = side === "YES" ? m.yesPrice : m.noPrice;
-  const cost = [120, 50, 320, 80, 200][i];
-  const shares = cost / (price - 0.05);
-  const value = shares * price;
-  return { market: m, side, cost, shares, value, pnl: value - cost };
-});
-
-const ACTIVITY = [
-  { t: "12m", action: "Bought YES", market: "Will SOL flip ETH 24h volume?", amount: 50, price: 0.41 },
-  { t: "1h", action: "Claimed", market: "BTC > $130k by April 30", amount: 280, price: 1.0 },
-  { t: "4h", action: "Bought NO", market: "Mad Lads floor > 60 SOL", amount: 80, price: 0.73 },
-  { t: "1d", action: "Sold YES", market: "Pump.fun token reaches $50M", amount: 144, price: 0.71 },
-  { t: "2d", action: "Provided liquidity", market: "Lakers reach 2026 Finals", amount: 500, price: 0.18 },
-];
-
 export default function Portfolio() {
-  const totalValue = POSITIONS.reduce((s, p) => s + p.value, 0);
-  const totalCost = POSITIONS.reduce((s, p) => s + p.cost, 0);
-  const totalPnl = totalValue - totalCost;
-  const winRate = 64;
+  const { connected, publicKey } = useWallet();
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["portfolio", publicKey?.toBase58()],
+    queryFn: () => api.portfolio(),
+    enabled: connected,
+  });
+
+  if (!connected) {
+    return (
+      <PageShell>
+        <section className="container flex flex-col items-center py-32 text-center">
+          <Wallet className="h-10 w-10 text-muted-foreground" />
+          <h1 className="mt-6 font-display text-3xl">Connect a Solana wallet</h1>
+          <p className="mt-3 max-w-md text-sm text-muted-foreground">
+            Your wallet is your identity on Heliora. Connect Phantom or Solflare from the top right to see your positions and P&L.
+          </p>
+        </section>
+      </PageShell>
+    );
+  }
+
+  const positions = data?.positions ?? [];
+  const summary = data?.summary;
 
   return (
     <PageShell>
@@ -35,7 +39,9 @@ export default function Portfolio() {
             <div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Wallet className="h-3.5 w-3.5" />
-                <span className="font-mono">8xKp…f9R3</span>
+                <span className="font-mono">
+                  {publicKey?.toBase58().slice(0, 4)}…{publicKey?.toBase58().slice(-4)}
+                </span>
                 <span className="badge-pill">
                   <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-soft" />
                   Connected
@@ -43,36 +49,22 @@ export default function Portfolio() {
               </div>
               <h1 className="mt-3 font-display text-4xl tracking-tight">Portfolio</h1>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium hover:bg-surface-hover">
-                <Download className="h-3.5 w-3.5" /> Export CSV
-              </button>
-              <Link to="/markets" className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3.5 py-2 text-sm font-semibold text-background shadow-button-inset">
-                Browse markets
-              </Link>
-            </div>
+            <Link to="/markets" className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-3.5 py-2 text-sm font-semibold text-background shadow-button-inset">
+              Browse markets
+            </Link>
           </div>
 
-          {/* Big stats */}
           <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-4">
-            <BigStat label="Portfolio value" value={`$${totalValue.toFixed(2)}`} sub={<span className={cn("font-mono text-xs", totalPnl >= 0 ? "text-success" : "text-destructive")}>{totalPnl >= 0 ? "+" : ""}{((totalPnl / totalCost) * 100).toFixed(2)}%</span>} />
-            <BigStat label="Realized P&L (30d)" value={`+$${(842.42).toFixed(2)}`} sub="14 closed positions" />
-            <BigStat label="Win rate" value={`${winRate}%`} sub="vs 49% protocol avg" />
-            <BigStat label="Idle yield earned" value="$24.81" sub="via Kamino · 5.4% APY" />
+            <BigStat label="Open value" value={summary ? `$${summary.openValue.toFixed(2)}` : "—"} sub={`${summary?.positions ?? 0} open`} />
+            <BigStat label="Unrealized P&L" value={summary ? `${summary.unrealized >= 0 ? "+" : ""}$${summary.unrealized.toFixed(2)}` : "—"} sub={summary && summary.openValue ? `${((summary.unrealized / summary.openValue) * 100).toFixed(2)}%` : ""} accent={summary && summary.unrealized >= 0 ? "success" : "destructive"} />
+            <BigStat label="Realized P&L" value={summary ? `${summary.realized >= 0 ? "+" : ""}$${summary.realized.toFixed(2)}` : "—"} sub="lifetime" />
+            <BigStat label="Idle yield" value="$0.00" sub="via Kamino · pending" />
           </div>
         </div>
       </section>
 
-      {/* Positions */}
       <section className="container py-10">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-2xl">Open positions</h2>
-          <div className="flex items-center gap-2 text-xs">
-            {["All", "Open", "Resolved", "Disputed"].map((t, i) => (
-              <button key={t} className={cn("rounded-md px-3 py-1.5 font-medium", i === 0 ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>{t}</button>
-            ))}
-          </div>
-        </div>
+        <h2 className="font-display text-2xl">Open positions</h2>
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface shadow-ring">
           <div className="grid grid-cols-12 border-b border-border bg-background px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -82,57 +74,78 @@ export default function Portfolio() {
             <div className="col-span-2 text-right">Value</div>
             <div className="col-span-2 text-right">P&L</div>
           </div>
-          {POSITIONS.map((p) => {
-            const up = p.pnl >= 0;
-            return (
-              <Link to={`/markets/${p.market.id}`} key={p.market.id} className="grid grid-cols-12 items-center border-t border-border/50 px-5 py-4 transition hover:bg-surface-hover">
-                <div className="col-span-5">
-                  <div className="line-clamp-1 text-sm font-medium">{p.market.question}</div>
-                  <div className="mt-1 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
-                    <span>{p.market.category}</span>
-                    <span>·</span>
-                    <span>ends {timeUntil(p.market.endsAt)}</span>
+          {isLoading ? (
+            <div className="px-5 py-12 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : isError ? (
+            <div className="px-5 py-12 text-center text-sm text-destructive">Failed to load portfolio</div>
+          ) : positions.length === 0 ? (
+            <div className="px-5 py-16 text-center text-sm text-muted-foreground">
+              No positions yet. <Link to="/markets" className="text-foreground underline">Browse markets →</Link>
+            </div>
+          ) : (
+            positions.map((p) => {
+              const side: "YES" | "NO" = p.yesShares > p.noShares ? "YES" : "NO";
+              const shares = side === "YES" ? p.yesShares : p.noShares;
+              const avg = side === "YES" ? p.avgYesCost : p.avgNoCost;
+              const price = side === "YES" ? p.market.yesPrice : p.market.noPrice;
+              const value = shares * price;
+              const cost = shares * avg;
+              const pnl = value - cost;
+              const up = pnl >= 0;
+              return (
+                <Link to={`/markets/${p.market.id}`} key={p.id} className="grid grid-cols-12 items-center border-t border-border/50 px-5 py-4 transition hover:bg-surface-hover">
+                  <div className="col-span-5">
+                    <div className="line-clamp-1 text-sm font-medium">{p.market.question}</div>
+                    <div className="mt-1 flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
+                      <span>{p.market.category}</span>
+                      <span>·</span>
+                      <span>ends {timeUntil(p.market.endsAt)}</span>
+                    </div>
                   </div>
-                </div>
-                <div className="col-span-1">
-                  <span className={cn("rounded px-2 py-0.5 text-[11px] font-bold", p.side === "YES" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive")}>
-                    {p.side}
-                  </span>
-                </div>
-                <div className="col-span-2 text-right font-mono text-sm">{(p.cost / p.shares).toFixed(3)}</div>
-                <div className="col-span-2 text-right font-mono text-sm">${p.value.toFixed(2)}</div>
-                <div className={cn("col-span-2 text-right font-mono text-sm font-semibold", up ? "text-success" : "text-destructive")}>
-                  <span className="inline-flex items-center gap-1">
-                    {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                    {up ? "+" : ""}${p.pnl.toFixed(2)}
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
+                  <div className="col-span-1">
+                    <span className={cn("rounded px-2 py-0.5 text-[11px] font-bold", side === "YES" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive")}>
+                      {side}
+                    </span>
+                  </div>
+                  <div className="col-span-2 text-right font-mono text-sm">{avg.toFixed(3)}</div>
+                  <div className="col-span-2 text-right font-mono text-sm">${value.toFixed(2)}</div>
+                  <div className={cn("col-span-2 text-right font-mono text-sm font-semibold", up ? "text-success" : "text-destructive")}>
+                    <span className="inline-flex items-center gap-1">
+                      {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                      {up ? "+" : ""}${pnl.toFixed(2)}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })
+          )}
         </div>
       </section>
 
-      {/* Activity + Composability */}
       <section className="container grid gap-6 pb-20 lg:grid-cols-[1fr_360px]">
         <div className="rounded-2xl border border-border bg-surface shadow-ring">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <h3 className="font-display text-lg">Recent activity</h3>
-            <button className="text-xs text-muted-foreground hover:text-foreground">View all <ExternalLink className="ml-1 inline h-3 w-3" /></button>
+            <span className="text-xs text-muted-foreground">last 100 trades</span>
           </div>
           <div className="divide-y divide-border/50">
-            {ACTIVITY.map((a, i) => (
-              <div key={i} className="flex items-center justify-between px-5 py-4">
+            {(data?.trades ?? []).slice(0, 10).map((a) => (
+              <div key={a.id} className="flex items-center justify-between px-5 py-4">
                 <div>
                   <div className="text-sm">
-                    <span className="font-medium">{a.action}</span>{" "}
-                    <span className="text-muted-foreground">· {a.market}</span>
+                    <span className="font-medium">{a.side === "YES" ? "Bought YES" : "Bought NO"}</span>{" "}
+                    <span className="text-muted-foreground">· {a.market.question}</span>
                   </div>
-                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">{a.t} ago · ${a.amount} @ {a.price.toFixed(2)}</div>
+                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">
+                    {new Date(a.createdAt).toLocaleString()} · ${a.cost.toFixed(2)} @ {a.price.toFixed(2)}
+                  </div>
                 </div>
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
             ))}
+            {!data?.trades?.length && (
+              <div className="px-5 py-10 text-center text-sm text-muted-foreground">No activity yet</div>
+            )}
           </div>
         </div>
 
@@ -167,14 +180,6 @@ export default function Portfolio() {
               <Sparkles className="h-3 w-3" /> Auto-payout routing
             </div>
             <p className="mt-2 text-sm text-muted-foreground">On resolution, winnings auto-route to your selected destination.</p>
-            <div className="mt-3 space-y-2 text-sm">
-              {["Wallet (USDC)", "Kamino vault", "Compound into next market"].map((o, i) => (
-                <label key={o} className="flex items-center gap-2 rounded-md border border-border bg-background p-2.5">
-                  <input type="radio" defaultChecked={i === 0} className="accent-foreground" />
-                  {o}
-                </label>
-              ))}
-            </div>
           </div>
         </div>
       </section>
@@ -182,12 +187,16 @@ export default function Portfolio() {
   );
 }
 
-function BigStat({ label, value, sub }: { label: string; value: string; sub: any }) {
+function BigStat({
+  label, value, sub, accent,
+}: { label: string; value: string; sub?: string; accent?: "success" | "destructive" }) {
   return (
     <div className="bg-background p-6">
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-2 font-display text-3xl">{value}</div>
-      <div className="mt-1">{typeof sub === "string" ? <span className="font-mono text-xs text-muted-foreground">{sub}</span> : sub}</div>
+      <div className={cn("mt-2 font-display text-3xl", accent === "success" ? "text-success" : accent === "destructive" ? "text-destructive" : "text-foreground")}>
+        {value}
+      </div>
+      {sub && <div className="mt-1 font-mono text-xs text-muted-foreground">{sub}</div>}
     </div>
   );
 }
