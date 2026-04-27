@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
+import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton";
 
 const NAV = [
   { to: "/markets", label: "Markets" },
@@ -62,9 +63,7 @@ export function Header() {
               Docs
             </Link>
           )}
-          <button className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition hover:bg-surface-hover shadow-ring">
-            Connect Wallet
-          </button>
+          <ConnectWalletButton className="heliora-wallet" />
           <Link
             to="/markets/create"
             className="rounded-md bg-foreground px-3.5 py-1.5 text-sm font-semibold text-background transition hover:opacity-90 shadow-button-inset"
@@ -102,13 +101,11 @@ export function Header() {
                 {item.label}
               </NavLink>
             ))}
-            <div className="mt-2 flex gap-2">
-              <button className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium">
-                Connect
-              </button>
+            <div className="mt-2 flex flex-col gap-2">
+              <ConnectWalletButton className="heliora-wallet w-full" />
               <Link
                 to="/markets/create"
-                className="flex-1 rounded-md bg-foreground px-3 py-2 text-center text-sm font-semibold text-background"
+                className="rounded-md bg-foreground px-3 py-2 text-center text-sm font-semibold text-background"
               >
                 Launch
               </Link>
