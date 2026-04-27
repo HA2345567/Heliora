@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SolanaProvider } from "@/components/wallet/SolanaProvider";
 import Index from "./pages/Index.tsx";
 import Markets from "./pages/Markets.tsx";
 import MarketDetail from "./pages/MarketDetail.tsx";
@@ -14,28 +15,32 @@ import Developers from "./pages/Developers.tsx";
 import Token from "./pages/Token.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 15_000, refetchOnWindowFocus: false } },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/markets" element={<Markets />} />
-          <Route path="/markets/create" element={<CreateMarket />} />
-          <Route path="/markets/:id" element={<MarketDetail />} />
-          <Route path="/portfolio" element={<Portfolio />} />
-          <Route path="/agents" element={<Agents />} />
-          <Route path="/oracle" element={<Oracle />} />
-          <Route path="/developers" element={<Developers />} />
-          <Route path="/token" element={<Token />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <SolanaProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/markets" element={<Markets />} />
+            <Route path="/markets/create" element={<CreateMarket />} />
+            <Route path="/markets/:id" element={<MarketDetail />} />
+            <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/agents" element={<Agents />} />
+            <Route path="/oracle" element={<Oracle />} />
+            <Route path="/developers" element={<Developers />} />
+            <Route path="/token" element={<Token />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </SolanaProvider>
   </QueryClientProvider>
 );
 
