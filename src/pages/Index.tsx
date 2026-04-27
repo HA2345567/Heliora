@@ -106,24 +106,23 @@ export default function Landing() {
             </div>
             <div className="relative">
               <div className="flex animate-marquee gap-3 py-4">
-                {(tickerMarkets.length ? [...tickerMarkets, ...tickerMarkets] : Array.from({ length: 8 })).map((m, i) => (
+                {(tickerMarkets.length ? [...tickerMarkets, ...tickerMarkets] : []).map((m, i) => (
                   <div
-                    key={i}
+                    key={`${m.id}-${i}`}
                     className="flex w-72 shrink-0 items-center gap-3 rounded-lg border border-border bg-background px-4 py-2.5"
                   >
-                    {m ? (
-                      <>
-                        <span className="rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
-                          {m.category}
-                        </span>
-                        <span className="line-clamp-1 flex-1 text-xs text-foreground/90">{m.question}</span>
-                        <span className="font-mono text-xs font-semibold text-foreground">
-                          {Math.round(m.yesPrice * 100)}¢
-                        </span>
-                      </>
-                    ) : (
-                      <div className="h-4 w-full animate-shimmer rounded bg-border/40" />
-                    )}
+                    <span className="rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
+                      {m.category}
+                    </span>
+                    <span className="line-clamp-1 flex-1 text-xs text-foreground/90">{m.question}</span>
+                    <span className="font-mono text-xs font-semibold text-foreground">
+                      {Math.round(m.yesPrice * 100)}¢
+                    </span>
+                  </div>
+                ))}
+                {!tickerMarkets.length && Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex w-72 shrink-0 items-center gap-3 rounded-lg border border-border bg-background px-4 py-2.5">
+                    <div className="h-4 w-full animate-shimmer rounded bg-border/40" />
                   </div>
                 ))}
               </div>
