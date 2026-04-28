@@ -593,57 +593,101 @@ async def recent_resolutions():
     return {"resolutions": serialize_list(resolutions)}
 
 
+CONSENSUS_THRESHOLD = 3   # ≥3 of 5 agents must agree
+ORACLE_QUORUM = 5         # always run 5 agents
+MIN_AVG_CONFIDENCE = 0.55 # below this, mark unresolved
+
+
 @api_router.post("/oracle/resolve/{market_id}")
 async def resolve_market(market_id: str, body: ResolveBody):
+    """
+    5-agent AI oracle consensus.
+    - Runs 5 independent LLM agents in parallel
+    - Confidence-weighted majority (≥3 of 5 hard threshold)
+    - If no side reaches threshold OR avg confidence < MIN_AVG_CONFIDENCE → status="disputed"
+    """
     market = await db.markets.find_one({"id": market_id})
     if not market:
         raise HTTPException(404, "Market not found")
+    if market.get("status") == "resolved":
+        raise HTTPException(400, "Market already resolved")
 
     all_agents = await db.agents.find({"status": "live"}).to_list(100)
-    if len(all_agents) < 5:
+    if len(all_agents) < ORACLE_QUORUM:
         all_agents = await db.agents.find().to_list(100)
-    oracle_agents = random.sample(all_agents, min(5, len(all_agents))) if all_agents else []
-    if not oracle_agents:
+    if not all_agents:
         raise HTTPException(400, "No oracle agents available")
+    oracle_agents = random.sample(all_agents, min(ORACLE_QUORUM, len(all_agents)))
 
-    # Run AI resolution for each agent
-    votes = []
-    for agent in oracle_agents:
-        result = await ai_oracle_resolve(
+    # Run all 5 agents in PARALLEL for speed (single Solana slot ~412ms target)
+    coroutines = [
+        ai_oracle_resolve(
             market["question"],
             market.get("resolutionDetail", ""),
             body.context or ""
-        )
+        ) for _ in oracle_agents
+    ]
+    results = await asyncio.gather(*coroutines, return_exceptions=True)
+
+    votes = []
+    for agent, result in zip(oracle_agents, results):
+        if isinstance(result, Exception):
+            result = {"outcome": "INVALID", "confidence": 0.3, "reasoning": f"Agent error: {type(result).__name__}"}
         votes.append({
             "id": new_id(),
             "vote": result["outcome"],
             "confidence": result["confidence"],
             "evidence": result["reasoning"],
-            "agent": {k: v for k, v in serialize(agent).items() if k not in ("_id",)}
+            "agent": {k: v for k, v in serialize(agent).items() if k != "_id"}
         })
 
-    # Tally
-    tally = {"YES": 0, "NO": 0, "INVALID": 0}
+    # Confidence-weighted tally
+    tally_count = {"YES": 0, "NO": 0, "INVALID": 0}
+    tally_conf = {"YES": 0.0, "NO": 0.0, "INVALID": 0.0}
     for v in votes:
-        tally[v["vote"]] = tally.get(v["vote"], 0) + 1
-    outcome = max(tally, key=tally.get)
-    consensus = tally[outcome]
+        tally_count[v["vote"]] = tally_count.get(v["vote"], 0) + 1
+        tally_conf[v["vote"]] = tally_conf.get(v["vote"], 0.0) + float(v["confidence"])
+
+    # Determine winning outcome by hard count threshold
+    outcome = max(tally_count, key=tally_count.get)
+    consensus = tally_count[outcome]
+    avg_conf = tally_conf[outcome] / consensus if consensus > 0 else 0.0
+    overall_avg_conf = sum(float(v["confidence"]) for v in votes) / max(1, len(votes))
+
+    is_disputed = consensus < CONSENSUS_THRESHOLD or overall_avg_conf < MIN_AVG_CONFIDENCE
+    final_status = "disputed" if is_disputed else "resolved"
+    final_outcome = outcome if not is_disputed else "DISPUTED"
+
+    reasoning = (
+        f"AI oracle consensus: {consensus}/{len(votes)} agents voted {outcome} "
+        f"(avg confidence {avg_conf:.0%}, overall {overall_avg_conf:.0%}). "
+        f"{'Below threshold — flagged disputed.' if is_disputed else 'Resolved on-chain.'}"
+    )
 
     resolution = {
         "id": new_id(),
         "marketId": market_id,
-        "outcome": outcome,
+        "outcome": final_outcome,
         "consensus": consensus,
         "totalVotes": len(votes),
-        "reasoning": f"AI oracle consensus ({consensus}/{len(votes)}): {votes[0]['evidence'][:300] if votes else ''}",
+        "tally": tally_count,
+        "weightedConfidence": {k: round(v, 3) for k, v in tally_conf.items()},
+        "averageConfidence": round(overall_avg_conf, 3),
+        "consensusThreshold": CONSENSUS_THRESHOLD,
+        "isDisputed": is_disputed,
+        "reasoning": reasoning,
         "createdAt": now_iso(),
         "market": serialize(market),
         "votes": votes
     }
     await db.oracle_resolutions.insert_one({k: v for k, v in resolution.items()})
-    await db.markets.update_one({"id": market_id}, {
-        "$set": {"status": "resolved", "outcome": outcome, "resolvedAt": now_iso()}
-    })
+
+    update_fields = {"status": final_status}
+    if not is_disputed:
+        update_fields["outcome"] = outcome
+        update_fields["resolvedAt"] = now_iso()
+    await db.markets.update_one({"id": market_id}, {"$set": update_fields})
+
     resolution.pop("_id", None)
     return {"resolution": resolution}
 

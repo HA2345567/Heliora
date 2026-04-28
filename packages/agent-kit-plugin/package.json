@@ -1,0 +1,32 @@
+{
+  "name": "@solanaspredict/agent-kit-plugin",
+  "version": "0.1.0",
+  "description": "Solana Agent Kit plugin for HELIORA — prediction market actions for autonomous AI agents",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": ["solana", "prediction-market", "agent-kit", "heliora", "ai-agents"],
+  "author": "Heliora Labs",
+  "license": "MIT",
+  "peerDependencies": {
+    "@solana/web3.js": "^1.95.0",
+    "solana-agent-kit": "^1.4.0"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

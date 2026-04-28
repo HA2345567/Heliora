@@ -357,26 +357,48 @@ function TriggerResolutionPanel() {
           )}
 
           {showResult && resolution && (
-            <div className="h-full rounded-xl border border-border bg-background overflow-hidden">
+            <div className="h-full rounded-xl border border-border bg-background overflow-hidden" data-testid="oracle-resolution-result">
               {/* Outcome */}
               <div className={cn("border-b border-border px-5 py-4", resolution.outcome === "YES" ? "bg-success/5" : resolution.outcome === "NO" ? "bg-destructive/5" : "bg-warning/5")}>
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">AI Verdict</span>
-                  <span className={cn("rounded-md px-3 py-1 text-sm font-bold uppercase tracking-wider", resolution.outcome === "YES" ? "bg-success/15 text-success" : resolution.outcome === "NO" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {resolution.isDisputed ? "Disputed verdict" : "AI Verdict"}
+                  </span>
+                  <span
+                    data-testid="oracle-outcome-badge"
+                    className={cn("rounded-md px-3 py-1 text-sm font-bold uppercase tracking-wider", resolution.outcome === "YES" ? "bg-success/15 text-success" : resolution.outcome === "NO" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}
+                  >
                     {resolution.outcome}
                   </span>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <ConsensusDots agents={resolution.totalVotes} consensus={resolution.consensus} outcome={resolution.outcome === "YES" ? "YES" : "NO"} />
+                  {resolution.averageConfidence !== undefined && (
+                    <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                      avg conf {(resolution.averageConfidence * 100).toFixed(0)}%
+                    </span>
+                  )}
                 </div>
+                {resolution.tally && (
+                  <div className="mt-3 grid grid-cols-3 gap-2 font-mono text-[10px]">
+                    <TallyChip label="YES" count={resolution.tally.YES} total={resolution.totalVotes} color="success" />
+                    <TallyChip label="NO" count={resolution.tally.NO} total={resolution.totalVotes} color="destructive" />
+                    <TallyChip label="INVALID" count={resolution.tally.INVALID} total={resolution.totalVotes} color="warning" />
+                  </div>
+                )}
+                {resolution.isDisputed && (
+                  <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 px-2.5 py-1.5 text-[10px] text-warning">
+                    Below {resolution.consensusThreshold ?? 3}-of-{resolution.totalVotes} threshold. On-chain status: <span className="font-bold">disputed</span>.
+                  </div>
+                )}
               </div>
 
               {/* Reasoning */}
               <div className="border-b border-border/50 p-5">
                 <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Reasoning</div>
                 <p className="mt-2 text-sm leading-relaxed text-foreground/90">
-                  {resolution.reasoning?.slice(0, 280) ?? "AI oracle reached consensus without explicit reasoning."}
-                  {(resolution.reasoning?.length ?? 0) > 280 && "…"}
+                  {resolution.reasoning?.slice(0, 320) ?? "AI oracle reached consensus without explicit reasoning."}
+                  {(resolution.reasoning?.length ?? 0) > 320 && "…"}
                 </p>
               </div>
 
@@ -415,6 +437,17 @@ function ConsensusDots({ agents, consensus, outcome }: { agents: number; consens
         <span key={i} className={cn("h-2 w-2 rounded-full", i < consensus ? color : "bg-border")} />
       ))}
       <span className="ml-2 font-mono text-[11px] text-muted-foreground">{consensus}/{agents}</span>
+    </div>
+  );
+}
+
+function TallyChip({ label, count, total, color }: { label: string; count: number; total: number; color: "success" | "destructive" | "warning" }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  const cls = color === "success" ? "bg-success/10 text-success border-success/20" : color === "destructive" ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-warning/10 text-warning border-warning/20";
+  return (
+    <div className={cn("flex items-center justify-between rounded-md border px-2 py-1.5", cls)}>
+      <span className="font-bold uppercase tracking-wider">{label}</span>
+      <span>{count}/{total} <span className="opacity-60">· {pct}%</span></span>
     </div>
   );
 }

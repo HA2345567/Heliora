@@ -8,7 +8,7 @@ export type MarketCategory = (typeof CATEGORIES)[number];
 
 export type ResolutionSource = "Pyth" | "Switchboard" | "AIOracle" | "DAOVote";
 export type MarketStatus = "open" | "resolving" | "resolved" | "disputed";
-export type Outcome = "YES" | "NO" | "INVALID";
+export type Outcome = "YES" | "NO" | "INVALID" | "DISPUTED";
 export type Side = "YES" | "NO";
 export type TradeKind = "market" | "limit" | "stop";
 
@@ -94,6 +94,11 @@ export interface ApiOracleResolution {
   outcome: Outcome;
   consensus: number;
   totalVotes: number;
+  tally?: { YES: number; NO: number; INVALID: number };
+  weightedConfidence?: { YES: number; NO: number; INVALID: number };
+  averageConfidence?: number;
+  consensusThreshold?: number;
+  isDisputed?: boolean;
   reasoning?: string | null;
   createdAt: string;
   market: ApiMarket;
