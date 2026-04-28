@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { PageShell } from "@/components/layout/PageShell";
 import { api } from "@/lib/api";
 import type { ApiOracleResolution } from "@/lib/api-types";
-import { Brain, CheckCircle2, Clock, Cpu, Network, Scale, ShieldCheck, Vote } from "lucide-react";
+import { Brain, CheckCircle2, ChevronDown, Clock, Cpu, Loader2, Network, Scale, Search, ShieldCheck, Sparkles, Vote, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -73,6 +74,10 @@ export default function Oracle() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="container pb-16">
+        <TriggerResolutionPanel />
       </section>
 
       <section className="container pb-16">
@@ -182,6 +187,223 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="bg-background p-6">
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-2 font-display text-2xl">{value}</div>
+    </div>
+  );
+}
+
+/* ============================== Trigger Resolution Panel ============================== */
+
+function TriggerResolutionPanel() {
+  const qc = useQueryClient();
+  const { data: marketsData } = useQuery({
+    queryKey: ["markets", "oracle-selector"],
+    queryFn: () => api.listMarkets({ take: 100, sort: "volume" }),
+    staleTime: 30_000,
+  });
+
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [context, setContext] = useState<string>("");
+  const [search, setSearch] = useState<string>("");
+  const [showResult, setShowResult] = useState(false);
+
+  const markets = (marketsData?.markets ?? []).filter((m) => m.status === "open");
+  const filteredMarkets = search
+    ? markets.filter((m) => m.question.toLowerCase().includes(search.toLowerCase()))
+    : markets;
+  const selectedMarket = markets.find((m) => m.id === selectedId);
+
+  const resolveMut = useMutation({
+    mutationFn: ({ id, ctx }: { id: string; ctx: string }) =>
+      api.resolveMarket(id, ctx),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["oracle", "recent"] });
+      setShowResult(true);
+    },
+  });
+
+  const resolution = resolveMut.data?.resolution;
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface shadow-ring overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background">
+            <Sparkles className="h-4 w-4 text-warning" />
+          </div>
+          <div>
+            <h3 className="font-display text-lg">Trigger AI Resolution</h3>
+            <p className="text-xs text-muted-foreground">Run GPT-4.1-mini oracle on any open market</p>
+          </div>
+        </div>
+        <span className="badge-pill">
+          <Zap className="h-3 w-3 text-warning" /> 5-agent consensus
+        </span>
+      </div>
+
+      <div className="grid gap-6 p-6 lg:grid-cols-2">
+        {/* Left: inputs */}
+        <div className="space-y-5">
+          {/* Market selector */}
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Select market
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search markets…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-lg border border-border bg-background pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
+              />
+            </div>
+            <div className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-border bg-background divide-y divide-border/40">
+              {filteredMarkets.slice(0, 10).map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => { setSelectedId(m.id); setSearch(""); setShowResult(false); resolveMut.reset(); }}
+                  className={cn(
+                    "flex w-full items-start justify-between gap-3 px-3.5 py-2.5 text-left text-sm transition hover:bg-surface-hover",
+                    selectedId === m.id && "bg-surface-hover",
+                  )}
+                >
+                  <span className="line-clamp-2 flex-1 text-foreground/90 leading-snug">{m.question}</span>
+                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold", m.yesPrice > 0.5 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
+                    {Math.round(m.yesPrice * 100)}¢
+                  </span>
+                </button>
+              ))}
+              {filteredMarkets.length === 0 && (
+                <div className="px-4 py-6 text-center text-xs text-muted-foreground">No open markets found</div>
+              )}
+            </div>
+            {selectedMarket && (
+              <div className="mt-2.5 rounded-lg border border-success/30 bg-success/5 px-3.5 py-2.5">
+                <div className="text-[11px] font-mono text-muted-foreground">Selected</div>
+                <div className="mt-0.5 text-sm font-medium leading-snug">{selectedMarket.question}</div>
+                <div className="mt-1 flex items-center gap-3 font-mono text-[10px] text-muted-foreground">
+                  <span>{selectedMarket.category}</span>
+                  <span>·</span>
+                  <span>{selectedMarket.resolution}</span>
+                  <span>·</span>
+                  <span className="text-foreground/70">{Math.round(selectedMarket.yesPrice * 100)}¢ YES</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Context */}
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Context <span className="text-muted-foreground/60">(optional)</span>
+            </label>
+            <textarea
+              rows={4}
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              placeholder="Provide any additional context for the oracle agents to consider when making their determination… e.g. 'BTC is currently at $142,000 as of April 2026'"
+              className="w-full resize-none rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-border-strong focus:outline-none"
+            />
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              The AI oracle agents will use this context alongside their training knowledge.
+            </div>
+          </div>
+
+          {/* Button */}
+          <button
+            onClick={() => { setShowResult(false); resolveMut.reset(); resolveMut.mutate({ id: selectedId, ctx: context }); }}
+            disabled={!selectedId || resolveMut.isPending}
+            className="group relative w-full overflow-hidden rounded-xl bg-foreground py-3 text-sm font-semibold text-background shadow-button-inset transition hover:opacity-90 disabled:opacity-40"
+          >
+            <span className="relative z-10 flex items-center justify-center gap-2">
+              {resolveMut.isPending ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Running 5 AI agents…</>
+              ) : (
+                <><Brain className="h-4 w-4" /> Trigger AI Oracle</>
+              )}
+            </span>
+          </button>
+
+          {resolveMut.isError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-sm text-destructive">
+              Oracle resolution failed. Please try again.
+            </div>
+          )}
+        </div>
+
+        {/* Right: result */}
+        <div>
+          {!showResult && !resolveMut.isPending && (
+            <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-12 text-center">
+              <Brain className="h-8 w-8 text-muted-foreground/40" />
+              <div className="text-sm font-medium text-muted-foreground">Resolution will appear here</div>
+              <p className="max-w-xs text-xs text-muted-foreground/70">
+                5 AI agents will independently evaluate the market and form a consensus
+              </p>
+            </div>
+          )}
+
+          {resolveMut.isPending && (
+            <div className="flex h-full flex-col items-center justify-center gap-4 rounded-xl border border-border bg-background py-12 text-center">
+              <div className="relative">
+                <Loader2 className="h-10 w-10 animate-spin text-foreground/20" />
+                <Brain className="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-foreground" />
+              </div>
+              <div className="text-sm font-medium">AI agents deliberating…</div>
+              <p className="text-xs text-muted-foreground">Evaluating evidence · Forming consensus</p>
+            </div>
+          )}
+
+          {showResult && resolution && (
+            <div className="h-full rounded-xl border border-border bg-background overflow-hidden">
+              {/* Outcome */}
+              <div className={cn("border-b border-border px-5 py-4", resolution.outcome === "YES" ? "bg-success/5" : resolution.outcome === "NO" ? "bg-destructive/5" : "bg-warning/5")}>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">AI Verdict</span>
+                  <span className={cn("rounded-md px-3 py-1 text-sm font-bold uppercase tracking-wider", resolution.outcome === "YES" ? "bg-success/15 text-success" : resolution.outcome === "NO" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>
+                    {resolution.outcome}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <ConsensusDots agents={resolution.totalVotes} consensus={resolution.consensus} outcome={resolution.outcome === "YES" ? "YES" : "NO"} />
+                </div>
+              </div>
+
+              {/* Reasoning */}
+              <div className="border-b border-border/50 p-5">
+                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Reasoning</div>
+                <p className="mt-2 text-sm leading-relaxed text-foreground/90">
+                  {resolution.reasoning?.slice(0, 280) ?? "AI oracle reached consensus without explicit reasoning."}
+                  {(resolution.reasoning?.length ?? 0) > 280 && "…"}
+                </p>
+              </div>
+
+              {/* Agent votes */}
+              <div className="p-5">
+                <div className="mb-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Agent votes</div>
+                <div className="space-y-2">
+                  {(resolution.votes ?? []).map((v, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 bg-surface/30 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-mono text-xs">{v.agent?.handle ?? `agent-${i + 1}`}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] text-muted-foreground">{(v.confidence * 100).toFixed(0)}%</span>
+                        <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase", v.vote === "YES" ? "bg-success/15 text-success" : v.vote === "NO" ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>
+                          {v.vote}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

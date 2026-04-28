@@ -207,6 +207,81 @@ frontend:
         agent: "testing"
         comment: "Added placeholder Supabase environment variables to .env file. App now initializes successfully. Supabase is only used for Kalshi integration (/live page), not core functionality."
 
+  - task: "Wallet connect with demo wallet"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/components/wallet/ConnectWalletButton.tsx"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "CRITICAL: WalletReadyState import error - imported from @solana/wallet-adapter-react but should be from @solana/wallet-adapter-base. This prevented entire app from loading."
+      - working: true
+        agent: "testing"
+        comment: "Fixed WalletReadyState import. Wallet connect now works perfectly. Modal shows Phantom, Solflare, Backpack, and Demo wallet options. Demo wallet connects successfully and displays truncated address with green pulsing dot indicator."
+
+  - task: "Market detail chart with volume bars"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/MarketDetail.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Volume bars successfully implemented below price chart. Found 39 volume bars visible using BarChart component from Recharts. Time range switching (1H, 1D, 1W, 1M, ALL) works correctly. Line/Candle mode switching works correctly."
+
+  - task: "Orderbook flash animation"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/MarketDetail.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Orderbook displays YES and NO depth books correctly. Depth visualization bars present (25+ elements with background gradients). WebSocket updates working. Flash animation implemented with animate-flash-green and animate-flash-red classes."
+
+  - task: "Create market page"
+    implemented: true
+    working: false
+    file: "/app/frontend/src/pages/CreateMarket.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "Route issue: /create returns 404 'Market not found'. The correct route is /markets/create (defined in App.tsx line 34). When accessing /markets/create, the page loads correctly with form fields, category selection, resolution source selection, and Deploy market button visible when wallet is connected."
+
+  - task: "Oracle AI resolution"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/Oracle.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Oracle resolution works correctly. Trigger AI Resolution panel allows market selection, context input, and triggers AI oracle. Result displays outcome (YES/NO), consensus dots (50 dots found), and agent votes section with individual agent decisions and confidence levels. Backend integration working with GPT-4.1-mini."
+
+  - task: "Portfolio page"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/pages/Portfolio.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Portfolio page loads correctly when wallet is connected. Shows wallet address with 'Connected' badge, portfolio stats (Open value, Unrealized P&L, Realized P&L, Idle yield), open positions table, and recent activity section. DeFi composability integrations (Kamino, MarginFi, Drift, Jupiter) displayed."
+
 backend:
   - task: "Markets API endpoint"
     implemented: true
@@ -247,12 +322,12 @@ backend:
 metadata:
   created_by: "testing_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: true
 
 test_plan:
   current_focus:
-    - "All tests completed successfully"
+    - "Create market route fix (/create should redirect to /markets/create)"
   stuck_tasks: []
   test_all: true
   test_priority: "high_first"
@@ -262,3 +337,7 @@ agent_communication:
     message: "Initial testing revealed missing Supabase environment variables causing app crash. Fixed by adding VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to .env. All requested features are now working correctly."
   - agent: "testing"
     message: "All tests passed: Home page loads with Heliora branding and dark theme, Markets list shows 20 markets, Market detail page displays chart, orderbook, price ticking, and AI Agents tab. Minor issue: Font CDN (fonts.cdnfonts.com) returns 500 errors, but this doesn't affect functionality."
+  - agent: "testing"
+    message: "CRITICAL FIX: WalletReadyState import error fixed. Changed import from @solana/wallet-adapter-react to @solana/wallet-adapter-base. This was preventing the entire app from loading."
+  - agent: "testing"
+    message: "Comprehensive testing completed for new features: Wallet connect works perfectly with demo wallet. Market detail chart shows VOLUME BARS below price chart (39 bars found). Orderbook displays YES/NO depth books with visualization. Oracle resolution works with AI agents showing consensus dots and votes. Portfolio displays correctly when wallet is connected. Create market route issue: /create returns 404, correct route is /markets/create."

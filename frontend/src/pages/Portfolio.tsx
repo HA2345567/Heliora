@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useHelioraWallet } from "@/components/wallet/useHelioraWallet";
 import { PageShell } from "@/components/layout/PageShell";
 import { api, formatUsd, timeUntil } from "@/lib/api";
 import { Link } from "react-router-dom";
@@ -7,9 +7,9 @@ import { ArrowDownRight, ArrowUpRight, Coins, ExternalLink, Sparkles, Wallet } f
 import { cn } from "@/lib/utils";
 
 export default function Portfolio() {
-  const { connected, publicKey } = useWallet();
+  const { connected, address: walletAddr, displayAddress } = useHelioraWallet();
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["portfolio", publicKey?.toBase58()],
+    queryKey: ["portfolio", walletAddr],
     queryFn: () => api.portfolio(),
     enabled: connected,
   });
@@ -40,7 +40,7 @@ export default function Portfolio() {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Wallet className="h-3.5 w-3.5" />
                 <span className="font-mono">
-                  {publicKey?.toBase58().slice(0, 4)}…{publicKey?.toBase58().slice(-4)}
+                  {displayAddress ?? "Unknown"}
                 </span>
                 <span className="badge-pill">
                   <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-soft" />

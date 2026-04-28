@@ -198,6 +198,31 @@
     from { background-position: 200% 0; }
     to { background-position: -200% 0; }
   }
+
+  /* Orderbook flash animations */
+  .animate-flash-green {
+    animation: flash-green 0.5s ease-out;
+  }
+  @keyframes flash-green {
+    0% { background-color: hsl(142 71% 45% / 0.30); }
+    100% { background-color: transparent; }
+  }
+
+  .animate-flash-red {
+    animation: flash-red 0.5s ease-out;
+  }
+  @keyframes flash-red {
+    0% { background-color: hsl(0 84% 60% / 0.30); }
+    100% { background-color: transparent; }
+  }
+
+  .animate-flash-neutral {
+    animation: flash-neutral 0.5s ease-out;
+  }
+  @keyframes flash-neutral {
+    0% { background-color: hsl(0 0% 100% / 0.12); }
+    100% { background-color: transparent; }
+  }
 }
 
 /* Solana wallet adapter — themed to Heliora */

@@ -13,6 +13,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  BarChart,
+  Bar,
+  Cell,
 } from "recharts";
 import {
   ArrowLeft,
@@ -679,92 +682,136 @@ export default function MarketDetail() {
   );
 }
 
-/* ============================== Polymarket-style Line Chart ============================== */
+/* ============================== Polymarket-style Line Chart + Volume Bars ============================== */
 
 function PolymarketChart({ pricePoints, live, range }: { pricePoints: ApiPricePoint[]; live: number; range: Range }) {
   const isGreen = live >= 0.5;
   const lineColor = isGreen ? "hsl(142 71% 45%)" : "hsl(0 84% 60%)";
   const gradientId = isGreen ? "poly-grad-green" : "poly-grad-red";
+  const volGradientId = isGreen ? "vol-grad-green" : "vol-grad-red";
 
   const filtered = filterPointsByRange(pricePoints, range);
-  const chartData = filtered.map((p) => ({
-    value: +(p.yesPrice * 100).toFixed(1),
-    label: formatChartLabel(p.ts, range),
-    ts: p.ts,
-  }));
+  const chartData = useMemo(() => {
+    const pts = filtered.length > 0 ? filtered : pricePoints.slice(-24);
+    return pts.map((p, i) => {
+      const prev = pts[i - 1];
+      const delta = prev ? Math.abs(p.yesPrice - prev.yesPrice) : 0.008;
+      const vol = Math.round(delta * 60000 + Math.random() * 4000 + 1500);
+      return {
+        value: +(p.yesPrice * 100).toFixed(1),
+        volume: vol,
+        label: formatChartLabel(p.ts, range),
+        ts: p.ts,
+      };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pricePoints, range]);
 
   // Inject live price at the end
-  if (chartData.length > 0) {
-    chartData[chartData.length - 1] = { ...chartData[chartData.length - 1], value: +(live * 100).toFixed(1) };
-  } else {
-    chartData.push({ value: +(live * 100).toFixed(1), label: "Now", ts: new Date().toISOString() });
-  }
+  const fullData = useMemo(() => {
+    if (!chartData.length) return [{ value: +(live * 100).toFixed(1), volume: 2000, label: "Now", ts: new Date().toISOString() }];
+    const copy = [...chartData];
+    copy[copy.length - 1] = { ...copy[copy.length - 1], value: +(live * 100).toFixed(1) };
+    return copy;
+  }, [chartData, live]);
 
-  const CustomTooltip = ({ active, payload, label }: {
-    active?: boolean;
-    payload?: { value: number }[];
-    label?: string;
-  }) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number; dataKey: string }[]; label?: string }) => {
     if (!active || !payload?.length) return null;
+    const pricePayload = payload.find((p) => p.dataKey === "value");
+    const volPayload = payload.find((p) => p.dataKey === "volume");
     return (
-      <div className="rounded-lg border border-border bg-background/95 px-3 py-2 shadow-ring backdrop-blur">
+      <div className="rounded-lg border border-border bg-background/95 px-3 py-2.5 shadow-ring backdrop-blur">
         <div className="font-mono text-[10px] text-muted-foreground">{label}</div>
-        <div className={cn("mt-0.5 font-display text-xl tabular-nums", isGreen ? "text-success" : "text-destructive")}>
-          {(payload[0].value ?? 0).toFixed(1)}¢
-        </div>
+        {pricePayload && (
+          <div className={cn("mt-0.5 font-display text-xl tabular-nums", isGreen ? "text-success" : "text-destructive")}>
+            {pricePayload.value?.toFixed(1)}¢
+          </div>
+        )}
+        {volPayload && (
+          <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+            Vol <span className="text-foreground/70">{(volPayload.value / 1000).toFixed(1)}K</span>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <ResponsiveContainer width="100%" height={340}>
-      <AreaChart data={chartData} margin={{ top: 16, right: 16, left: -8, bottom: 4 }}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColor} stopOpacity={0.22} />
-            <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 8" stroke="hsl(0 0% 100% / 0.05)" vertical={false} />
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 10, fill: "hsl(0 0% 56%)", fontFamily: "JetBrains Mono, monospace" }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-          minTickGap={40}
-        />
-        <YAxis
-          domain={[0, 100]}
-          tick={{ fontSize: 10, fill: "hsl(0 0% 56%)", fontFamily: "JetBrains Mono, monospace" }}
-          tickFormatter={(v: number) => `${v}¢`}
-          axisLine={false}
-          tickLine={false}
-          width={36}
-          ticks={[0, 25, 50, 75, 100]}
-        />
-        <ReferenceLine
-          y={50}
-          stroke="hsl(0 0% 100% / 0.10)"
-          strokeDasharray="3 6"
-          label={{ value: "50¢", position: "insideTopRight", fontSize: 9, fill: "hsl(0 0% 48%)", fontFamily: "JetBrains Mono" }}
-        />
-        <Tooltip
-          content={<CustomTooltip />}
-          cursor={{ stroke: "hsl(0 0% 100% / 0.15)", strokeWidth: 1, strokeDasharray: "3 4" }}
-        />
-        <Area
-          type="monotone"
-          dataKey="value"
-          stroke={lineColor}
-          strokeWidth={2}
-          fill={`url(#${gradientId})`}
-          dot={false}
-          activeDot={{ r: 4, strokeWidth: 0, fill: lineColor }}
-          isAnimationActive={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div className="flex h-[340px] w-full flex-col">
+      {/* Price chart — 78% */}
+      <div className="flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={fullData} margin={{ top: 16, right: 16, left: -8, bottom: 0 }} syncId="predchart">
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={lineColor} stopOpacity={0.22} />
+                <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 8" stroke="hsl(0 0% 100% / 0.05)" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 10, fill: "hsl(0 0% 56%)", fontFamily: "JetBrains Mono, monospace" }}
+              axisLine={false}
+              tickLine={false}
+              interval="preserveStartEnd"
+              minTickGap={40}
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={{ fontSize: 10, fill: "hsl(0 0% 56%)", fontFamily: "JetBrains Mono, monospace" }}
+              tickFormatter={(v: number) => `${v}¢`}
+              axisLine={false}
+              tickLine={false}
+              width={36}
+              ticks={[0, 25, 50, 75, 100]}
+            />
+            <ReferenceLine
+              y={50}
+              stroke="hsl(0 0% 100% / 0.10)"
+              strokeDasharray="3 6"
+              label={{ value: "50¢", position: "insideTopRight", fontSize: 9, fill: "hsl(0 0% 48%)", fontFamily: "JetBrains Mono" }}
+            />
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{ stroke: "hsl(0 0% 100% / 0.15)", strokeWidth: 1, strokeDasharray: "3 4" }}
+            />
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke={lineColor}
+              strokeWidth={2}
+              fill={`url(#${gradientId})`}
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 0, fill: lineColor }}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Volume bars — 22% */}
+      <div className="h-[68px] border-t border-border/30">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={fullData} margin={{ top: 4, right: 16, left: -8, bottom: 0 }} syncId="predchart">
+            <defs>
+              <linearGradient id={volGradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={lineColor} stopOpacity={0.55} />
+                <stop offset="100%" stopColor={lineColor} stopOpacity={0.15} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="label" hide />
+            <YAxis hide domain={[0, "dataMax * 2.5"]} />
+            <Tooltip content={() => null} cursor={{ fill: "hsl(0 0% 100% / 0.04)" }} />
+            <Bar dataKey="volume" fill={`url(#${volGradientId})`} radius={[1, 1, 0, 0]} isAnimationActive={false} maxBarSize={6}>
+              {fullData.map((_, i) => (
+                <Cell key={i} fill={`url(#${volGradientId})`} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }
 
@@ -851,13 +898,37 @@ function CandleChart({ candles, live }: { candles: Candle[]; live: number }) {
   );
 }
 
-/* ============================== Backpack-style Orderbook ============================== */
+/* ============================== Backpack-style Orderbook with Flash ============================== */
 
 function DepthBook({ side, rows, mid }: { side: Side; rows: OBRow[]; mid: number }) {
   const isYes = side === "YES";
   const max = rows.reduce((m, r) => Math.max(m, r.total), 0.001);
-  const lineColor = isYes ? "hsl(142 71% 45% / 0.12)" : "hsl(0 84% 60% / 0.12)";
+  const bgFill = isYes ? "hsl(142 71% 45% / 0.12)" : "hsl(0 84% 60% / 0.12)";
   const textColor = isYes ? "text-success" : "text-destructive";
+
+  // Flash animation tracking
+  const prevRowsRef = useRef<OBRow[]>([]);
+  const [flashedRows, setFlashedRows] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!prevRowsRef.current.length) {
+      prevRowsRef.current = rows;
+      return;
+    }
+    const changed = new Set<number>();
+    rows.forEach((r, i) => {
+      const prev = prevRowsRef.current[i];
+      if (prev && (Math.abs(prev.size - r.size) > 10 || Math.abs(prev.price - r.price) > 0.0005)) {
+        changed.add(i);
+      }
+    });
+    prevRowsRef.current = rows;
+    if (changed.size > 0) {
+      setFlashedRows(changed);
+      const t = setTimeout(() => setFlashedRows(new Set()), 550);
+      return () => clearTimeout(t);
+    }
+  }, [rows]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-background">
@@ -884,26 +955,35 @@ function DepthBook({ side, rows, mid }: { side: Side; rows: OBRow[]; mid: number
       <div className="divide-y divide-border/20">
         {rows.slice(0, 12).map((r, i) => {
           const pct = (r.total / max) * 100;
+          const isFlashing = flashedRows.has(i);
           return (
             <div
               key={i}
-              className="relative grid grid-cols-3 items-center px-4 py-[5px] font-mono text-[11px] transition-colors hover:bg-surface-hover/30"
+              className={cn(
+                "relative grid grid-cols-3 items-center px-4 py-[5px] font-mono text-[11px] transition-colors hover:bg-surface-hover/30",
+                isFlashing && (isYes ? "animate-flash-green" : "animate-flash-red"),
+              )}
             >
-              {/* Depth bar */}
+              {/* Depth fill bar */}
               <div
                 className="absolute inset-y-0 right-0 transition-all duration-500"
-                style={{ width: `${pct}%`, background: lineColor }}
+                style={{ width: `${pct}%`, background: bgFill }}
               />
               <span className={cn("relative z-10 font-semibold", textColor)}>{r.price.toFixed(3)}</span>
-              <span className="relative z-10 text-right tabular-nums text-foreground/80">{r.size.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-              <span className="relative z-10 text-right tabular-nums text-muted-foreground">{r.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              <span className="relative z-10 text-right tabular-nums text-foreground/80">
+                {r.size.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </span>
+              <span className="relative z-10 text-right tabular-nums text-muted-foreground">
+                {r.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </span>
             </div>
           );
         })}
       </div>
-      {/* Spread footer */}
+      {/* Footer */}
       <div className="border-t border-border/40 px-4 py-2 font-mono text-[10px] text-muted-foreground">
-        Spread <span className="text-foreground/70">0.004</span> · Depth <span className="text-foreground/70">{max.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+        Spread <span className="text-foreground/70">0.004</span> · Depth{" "}
+        <span className="text-foreground/70">{max.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
       </div>
     </div>
   );

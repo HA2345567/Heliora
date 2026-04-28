@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useHelioraWallet } from "@/components/wallet/useHelioraWallet";
+import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { PageShell } from "@/components/layout/PageShell";
@@ -18,7 +19,7 @@ const RES: { key: ResolutionSource; label: string; icon: any; desc: string; best
 
 export default function CreateMarket() {
   const navigate = useNavigate();
-  const { connected } = useWallet();
+  const { connected } = useHelioraWallet();
   const [step] = useState(1);
   const [type, setType] = useState<"binary" | "categorical">("binary");
   const [question, setQuestion] = useState("Will SOL close above $300 by July 1?");
@@ -168,14 +169,18 @@ export default function CreateMarket() {
               <span className="font-mono text-xs text-muted-foreground">
                 {connected ? "Network fee: ~0.000012 SOL" : "Connect wallet to deploy"}
               </span>
-              <button
-                onClick={() => createMut.mutate()}
-                disabled={!connected || createMut.isPending || !question.trim()}
-                className="inline-flex items-center gap-2 rounded-md bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-button-inset transition hover:opacity-90 disabled:opacity-50"
-              >
-                {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                {createMut.isPending ? "Deploying…" : "Deploy market"}
-              </button>
+              {!connected ? (
+                <ConnectWalletButton />
+              ) : (
+                <button
+                  onClick={() => createMut.mutate()}
+                  disabled={createMut.isPending || !question.trim()}
+                  className="inline-flex items-center gap-2 rounded-md bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-button-inset transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                  {createMut.isPending ? "Deploying…" : "Deploy market"}
+                </button>
+              )}
             </div>
           </div>
 
