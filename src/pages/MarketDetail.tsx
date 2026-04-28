@@ -190,7 +190,9 @@ export default function MarketDetail() {
                 <Wallet className="h-3.5 w-3.5" /> {formatUsd(market.volume)} volume
               </span>
               <span className="inline-flex items-center gap-1.5">
-                Created by <span className="font-mono text-foreground/80">{market.creator}</span> · {market.createdAgo}
+                Created by <span className="font-mono text-foreground/80">
+                  {market.creator?.handle ?? `${market.creator?.wallet?.slice(0, 4)}…${market.creator?.wallet?.slice(-4)}`}
+                </span> · {timeAgo(market.createdAt)}
               </span>
             </div>
 
@@ -203,7 +205,7 @@ export default function MarketDetail() {
                     <span className="text-2xl text-muted-foreground">¢</span>
                   </span>
                   <span className="text-sm font-medium text-muted-foreground">YES probability</span>
-                  <PriceTickPill dir={tickDir} value={market.trend} />
+                  <PriceTickPill dir={tickDir} value={trend} />
                 </div>
                 <div className="hidden text-right text-xs text-muted-foreground md:block">
                   <div>NO settles at <span className="font-mono text-foreground/80">{noCents}¢</span></div>
@@ -259,11 +261,11 @@ export default function MarketDetail() {
                     <span
                       className={cn(
                         "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px]",
-                        market.trend >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
+                        trend >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
                       )}
                     >
-                      {market.trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                      {(market.trend * 100).toFixed(2)}% 24h
+                      {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                      {(trend * 100).toFixed(2)}% 24h
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -543,7 +545,7 @@ export default function MarketDetail() {
                   Related markets
                 </div>
                 <div className="space-y-2">
-                  {MARKETS.filter((m) => m.id !== market.id)
+                  {(relatedData?.markets ?? []).filter((m) => m.id !== market.id)
                     .slice(0, 3)
                     .map((m) => (
                       <Link
@@ -906,24 +908,23 @@ function CandleChart({ candles, live }: { candles: Candle[]; live: number }) {
 
 /* ============================== Sub markets / Activity / Holders / Rules ============================== */
 
-function buildSubMarkets(m: Market) {
-  // Synthetic linked sub-markets, derived from the main question
-  const base = Math.round(m.yesPrice * 100);
+function buildSubMarkets(yesPrice: number, volume: number) {
+  const base = Math.round(yesPrice * 100);
   return [
-    { id: "s1", label: `Above ${(base + 8).toString()}¢ within 24h`, yes: Math.max(5, base - 18), vol: m.volume * 0.21 },
-    { id: "s2", label: `Resolves YES before deadline`, yes: Math.min(95, base + 6), vol: m.volume * 0.34 },
-    { id: "s3", label: `Daily candle closes green tomorrow`, yes: 47, vol: m.volume * 0.11 },
-    { id: "s4", label: `Volume crosses ${formatUsd(m.volume * 1.5)} this week`, yes: 28, vol: m.volume * 0.08 },
+    { id: "s1", label: `Above ${(base + 8).toString()}¢ within 24h`, yes: Math.max(5, base - 18), vol: volume * 0.21 },
+    { id: "s2", label: `Resolves YES before deadline`, yes: Math.min(95, base + 6), vol: volume * 0.34 },
+    { id: "s3", label: `Daily candle closes green tomorrow`, yes: 47, vol: volume * 0.11 },
+    { id: "s4", label: `Volume crosses ${formatUsd(volume * 1.5)} this week`, yes: 28, vol: volume * 0.08 },
   ];
 }
 
-function generateActivity(m: Market) {
+function generateActivity(yesPrice: number) {
   const names = ["pulse.sol", "arc.agent", "0x4f...92e", "anchor.dao", "drift.bot", "wire.alpha", "0x88...c1a", "lattice.ai"];
   const out = Array.from({ length: 14 }, (_, i) => {
     const side: Side = Math.random() > 0.5 ? "YES" : "NO";
     const isBuy = Math.random() > 0.35;
     const amount = Math.floor(20 + Math.random() * 4800);
-    const price = side === "YES" ? m.yesPrice : 1 - m.yesPrice;
+    const price = side === "YES" ? yesPrice : 1 - yesPrice;
     const drift = (Math.random() - 0.5) * 0.04;
     return {
       id: i,
@@ -980,7 +981,7 @@ function ActivityFeed({ rows }: { rows: ReturnType<typeof generateActivity> }) {
   );
 }
 
-function generateHolders(m: Market) {
+function generateHolders(yesPrice: number) {
   return Array.from({ length: 8 }, (_, i) => {
     const yes = Math.random() > 0.4;
     const shares = Math.floor(800 + Math.random() * 24000);
@@ -1046,7 +1047,7 @@ function HoldersList({ rows }: { rows: ReturnType<typeof generateHolders> }) {
   );
 }
 
-function ResolutionRules({ market }: { market: Market }) {
+function ResolutionRules({ market }: { market: ApiMarket }) {
   return (
     <div className="space-y-5">
       <p className="text-sm leading-relaxed text-foreground/90">
