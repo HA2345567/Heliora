@@ -1,25 +1,48 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { PageShell } from "@/components/layout/PageShell";
-import { CATEGORIES, MarketCategory } from "@/lib/mock-data";
-import { ArrowLeft, ArrowRight, Brain, Calendar, Check, CheckCircle2, Coins, Database, Network, Radio, Sparkles, Zap } from "lucide-react";
-import { Link } from "react-router-dom";
+import { api } from "@/lib/api";
+import { CATEGORIES, type MarketCategory, type ResolutionSource } from "@/lib/api-types";
+import { ArrowLeft, ArrowRight, Brain, Calendar, Check, CheckCircle2, Coins, Database, Loader2, Network, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const RES = [
-  { key: "Pyth", icon: Database, desc: "Auto-resolve from on-chain price feeds. Sub-slot settlement.", best: "Crypto, FX, commodities" },
-  { key: "Switchboard", icon: Network, desc: "Custom data feeds. APIs, sports stats, analytics.", best: "DeFi metrics, sports" },
-  { key: "AI Oracle", icon: Brain, desc: "5-agent consensus with web search + reasoning.", best: "Subjective, news, social" },
-  { key: "DAO Vote", icon: CheckCircle2, desc: "PREDICT holders vote. 48h dispute window.", best: "Governance, futarchy" },
-] as const;
+const RES: { key: ResolutionSource; label: string; icon: any; desc: string; best: string }[] = [
+  { key: "Pyth", label: "Pyth", icon: Database, desc: "Auto-resolve from on-chain price feeds. Sub-slot settlement.", best: "Crypto, FX, commodities" },
+  { key: "Switchboard", label: "Switchboard", icon: Network, desc: "Custom data feeds. APIs, sports stats, analytics.", best: "DeFi metrics, sports" },
+  { key: "AIOracle", label: "AI Oracle", icon: Brain, desc: "5-agent consensus with web search + reasoning.", best: "Subjective, news, social" },
+  { key: "DAOVote", label: "DAO Vote", icon: CheckCircle2, desc: "PREDICT holders vote. 48h dispute window.", best: "Governance, futarchy" },
+];
 
 export default function CreateMarket() {
-  const [step, setStep] = useState(1);
+  const navigate = useNavigate();
+  const { connected } = useWallet();
+  const [step] = useState(1);
   const [type, setType] = useState<"binary" | "categorical">("binary");
   const [question, setQuestion] = useState("Will SOL close above $300 by July 1?");
   const [cat, setCat] = useState<MarketCategory>("Crypto");
-  const [resolution, setResolution] = useState("Pyth");
+  const [resolution, setResolution] = useState<ResolutionSource>("Pyth");
   const [seed, setSeed] = useState(500);
   const [endDate, setEndDate] = useState("2026-07-01");
+
+  const createMut = useMutation({
+    mutationFn: () =>
+      api.createMarket({
+        question,
+        category: cat,
+        resolution,
+        endsAt: new Date(endDate).toISOString(),
+        liquiditySeed: seed,
+        isLive: true,
+      }),
+    onSuccess: ({ market }) => {
+      toast.success("Market deployed");
+      navigate(`/markets/${market.id}`);
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to deploy market"),
+  });
 
   return (
     <PageShell>
@@ -106,7 +129,7 @@ export default function CreateMarket() {
                       </div>
                       {resolution === r.key && <Check className="h-4 w-4" />}
                     </div>
-                    <div className="mt-3 font-display text-base">{r.key}</div>
+                    <div className="mt-3 font-display text-base">{r.label}</div>
                     <p className="mt-1 text-xs text-muted-foreground">{r.desc}</p>
                     <div className="mt-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                       Best for: {r.best}
@@ -142,9 +165,16 @@ export default function CreateMarket() {
             </Section>
 
             <div className="flex items-center justify-between border-t border-border pt-6">
-              <span className="font-mono text-xs text-muted-foreground">Network fee: ~0.000012 SOL</span>
-              <button className="inline-flex items-center gap-2 rounded-md bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-button-inset hover:opacity-90">
-                Deploy market <ArrowRight className="h-4 w-4" />
+              <span className="font-mono text-xs text-muted-foreground">
+                {connected ? "Network fee: ~0.000012 SOL" : "Connect wallet to deploy"}
+              </span>
+              <button
+                onClick={() => createMut.mutate()}
+                disabled={!connected || createMut.isPending || !question.trim()}
+                className="inline-flex items-center gap-2 rounded-md bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-button-inset transition hover:opacity-90 disabled:opacity-50"
+              >
+                {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                {createMut.isPending ? "Deploying…" : "Deploy market"}
               </button>
             </div>
           </div>
@@ -180,7 +210,7 @@ export default function CreateMarket() {
                 <Row k="Your fee share" v="0.3% per trade" />
                 <Row k="LP fee" v="0.5%" />
                 <Row k="Protocol fee" v="0.2%" />
-                <Row k="Resolution window" v={resolution === "AI Oracle" ? "1 hour" : "1 slot"} />
+                <Row k="Resolution window" v={resolution === "AIOracle" ? "1 hour" : "1 slot"} />
                 <Row k="Idle yield routing" v="Kamino · 5.4% APY" />
               </div>
 

@@ -1,8 +1,10 @@
 // Shared API types matching backend Prisma models.
 
-export type MarketCategory =
-  | "Crypto" | "Politics" | "Sports" | "Memes"
-  | "NFTs" | "DeFi" | "Social" | "AI";
+export const CATEGORIES = [
+  "Crypto", "Politics", "Sports", "Memes",
+  "NFTs", "DeFi", "Social", "AI",
+] as const;
+export type MarketCategory = (typeof CATEGORIES)[number];
 
 export type ResolutionSource = "Pyth" | "Switchboard" | "AIOracle" | "DAOVote";
 export type MarketStatus = "open" | "resolving" | "resolved" | "disputed";

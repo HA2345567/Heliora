@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
-import { MARKETS, formatUsd, timeUntil, type Market } from "@/lib/mock-data";
+import { api, formatUsd, timeUntil } from "@/lib/api";
+import type { ApiMarket } from "@/lib/api-types";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -9,14 +11,12 @@ import {
   Bookmark,
   CandlestickChart,
   CheckCircle2,
-  ChevronDown,
   Clock,
   Copy,
   ExternalLink,
   Eye,
   Flame,
   LineChart as LineChartIcon,
-  Radio,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -33,14 +33,43 @@ type OrderType = "Market" | "Limit" | "Stop";
 type ChartMode = "Line" | "Candle";
 type Range = "1H" | "1D" | "1W" | "1M" | "ALL";
 
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 export default function MarketDetail() {
-  const { id } = useParams();
-  const market = useMemo(() => MARKETS.find((m) => m.id === id) ?? MARKETS[0], [id]);
+  const { id } = useParams<{ id: string }>();
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["market", id],
+    queryFn: () => api.getMarket(id!),
+    enabled: !!id,
+  });
+  const { data: relatedData } = useQuery({
+    queryKey: ["markets", "related"],
+    queryFn: () => api.listMarkets({ sort: "volume", take: 6 }),
+  });
+
+  const market = data?.market;
+  const trend = useMemo(() => {
+    if (!market) return 0;
+    const pts = market.pricePoints ?? [];
+    if (pts.length < 2) return 0;
+    return market.yesPrice - pts[0].yesPrice;
+  }, [market]);
+
+  const seedYes = market?.yesPrice ?? 0.5;
+  const seedVolume = market?.volume ?? 0;
 
   // Live ticking price
-  const [livePrice, setLivePrice] = useState(market.yesPrice);
+  const [livePrice, setLivePrice] = useState(seedYes);
   const [tickDir, setTickDir] = useState<"up" | "down" | "flat">("flat");
   useEffect(() => {
+    if (!market) return;
     setLivePrice(market.yesPrice);
     const t = setInterval(() => {
       setLivePrice((p) => {
@@ -51,13 +80,13 @@ export default function MarketDetail() {
       });
     }, 1500);
     return () => clearInterval(t);
-  }, [market.id, market.yesPrice]);
+  }, [market?.id, market?.yesPrice, market]);
 
   // Trading state
   const [side, setSide] = useState<Side>("YES");
   const [orderType, setOrderType] = useState<OrderType>("Market");
   const [amount, setAmount] = useState(100);
-  const [limitPrice, setLimitPrice] = useState<number>(Math.round(market.yesPrice * 100));
+  const [limitPrice, setLimitPrice] = useState<number>(Math.round(seedYes * 100));
   const [chartMode, setChartMode] = useState<ChartMode>("Line");
   const [range, setRange] = useState<Range>("1D");
   const [tab, setTab] = useState<"orderbook" | "activity" | "holders" | "rules">("orderbook");
@@ -66,19 +95,29 @@ export default function MarketDetail() {
   const livePriceForSide = side === "YES" ? livePrice : 1 - livePrice;
   const fillPrice = orderType === "Market" ? livePriceForSide : limitPrice / 100;
   const shares = amount / Math.max(0.01, fillPrice);
-  const potential = shares; // each winning share pays $1
+  const potential = shares;
   const profit = potential - amount;
   const fee = amount * 0.01;
 
-  const candles = useMemo(() => generateCandles(market.yesPrice, market.trend, range), [market.id, market.trend, range, market.yesPrice]);
+  const candles = useMemo(() => generateCandles(seedYes, trend, range), [market?.id, trend, range, seedYes]);
   const linePoints = useMemo(() => candles.map((c) => c.close), [candles]);
   const orderbook = useMemo(() => generateOrderbook(livePrice), [livePrice]);
-  const subMarkets = useMemo(() => buildSubMarkets(market), [market]);
-  const activity = useMemo(() => generateActivity(market), [market]);
-  const holders = useMemo(() => generateHolders(market), [market]);
+  const subMarkets = useMemo(() => buildSubMarkets(seedYes, seedVolume), [seedYes, seedVolume]);
+  const activity = useMemo(() => generateActivity(seedYes), [seedYes, market?.id]);
+  const holders = useMemo(() => generateHolders(seedYes), [seedYes, market?.id]);
 
   const yesCents = Math.round(livePrice * 100);
   const noCents = 100 - yesCents;
+
+  if (isLoading || !market) {
+    return (
+      <PageShell>
+        <div className="container py-32 text-center text-sm text-muted-foreground">
+          {isError ? "Failed to load market." : "Loading market…"}
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>
@@ -151,7 +190,9 @@ export default function MarketDetail() {
                 <Wallet className="h-3.5 w-3.5" /> {formatUsd(market.volume)} volume
               </span>
               <span className="inline-flex items-center gap-1.5">
-                Created by <span className="font-mono text-foreground/80">{market.creator}</span> · {market.createdAgo}
+                Created by <span className="font-mono text-foreground/80">
+                  {market.creator?.handle ?? `${market.creator?.wallet?.slice(0, 4)}…${market.creator?.wallet?.slice(-4)}`}
+                </span> · {timeAgo(market.createdAt)}
               </span>
             </div>
 
@@ -164,7 +205,7 @@ export default function MarketDetail() {
                     <span className="text-2xl text-muted-foreground">¢</span>
                   </span>
                   <span className="text-sm font-medium text-muted-foreground">YES probability</span>
-                  <PriceTickPill dir={tickDir} value={market.trend} />
+                  <PriceTickPill dir={tickDir} value={trend} />
                 </div>
                 <div className="hidden text-right text-xs text-muted-foreground md:block">
                   <div>NO settles at <span className="font-mono text-foreground/80">{noCents}¢</span></div>
@@ -220,11 +261,11 @@ export default function MarketDetail() {
                     <span
                       className={cn(
                         "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px]",
-                        market.trend >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
+                        trend >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
                       )}
                     >
-                      {market.trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                      {(market.trend * 100).toFixed(2)}% 24h
+                      {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                      {(trend * 100).toFixed(2)}% 24h
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -504,7 +545,7 @@ export default function MarketDetail() {
                   Related markets
                 </div>
                 <div className="space-y-2">
-                  {MARKETS.filter((m) => m.id !== market.id)
+                  {(relatedData?.markets ?? []).filter((m) => m.id !== market.id)
                     .slice(0, 3)
                     .map((m) => (
                       <Link
@@ -867,24 +908,23 @@ function CandleChart({ candles, live }: { candles: Candle[]; live: number }) {
 
 /* ============================== Sub markets / Activity / Holders / Rules ============================== */
 
-function buildSubMarkets(m: Market) {
-  // Synthetic linked sub-markets, derived from the main question
-  const base = Math.round(m.yesPrice * 100);
+function buildSubMarkets(yesPrice: number, volume: number) {
+  const base = Math.round(yesPrice * 100);
   return [
-    { id: "s1", label: `Above ${(base + 8).toString()}¢ within 24h`, yes: Math.max(5, base - 18), vol: m.volume * 0.21 },
-    { id: "s2", label: `Resolves YES before deadline`, yes: Math.min(95, base + 6), vol: m.volume * 0.34 },
-    { id: "s3", label: `Daily candle closes green tomorrow`, yes: 47, vol: m.volume * 0.11 },
-    { id: "s4", label: `Volume crosses ${formatUsd(m.volume * 1.5)} this week`, yes: 28, vol: m.volume * 0.08 },
+    { id: "s1", label: `Above ${(base + 8).toString()}¢ within 24h`, yes: Math.max(5, base - 18), vol: volume * 0.21 },
+    { id: "s2", label: `Resolves YES before deadline`, yes: Math.min(95, base + 6), vol: volume * 0.34 },
+    { id: "s3", label: `Daily candle closes green tomorrow`, yes: 47, vol: volume * 0.11 },
+    { id: "s4", label: `Volume crosses ${formatUsd(volume * 1.5)} this week`, yes: 28, vol: volume * 0.08 },
   ];
 }
 
-function generateActivity(m: Market) {
+function generateActivity(yesPrice: number) {
   const names = ["pulse.sol", "arc.agent", "0x4f...92e", "anchor.dao", "drift.bot", "wire.alpha", "0x88...c1a", "lattice.ai"];
   const out = Array.from({ length: 14 }, (_, i) => {
     const side: Side = Math.random() > 0.5 ? "YES" : "NO";
     const isBuy = Math.random() > 0.35;
     const amount = Math.floor(20 + Math.random() * 4800);
-    const price = side === "YES" ? m.yesPrice : 1 - m.yesPrice;
+    const price = side === "YES" ? yesPrice : 1 - yesPrice;
     const drift = (Math.random() - 0.5) * 0.04;
     return {
       id: i,
@@ -941,7 +981,7 @@ function ActivityFeed({ rows }: { rows: ReturnType<typeof generateActivity> }) {
   );
 }
 
-function generateHolders(m: Market) {
+function generateHolders(yesPrice: number) {
   return Array.from({ length: 8 }, (_, i) => {
     const yes = Math.random() > 0.4;
     const shares = Math.floor(800 + Math.random() * 24000);
@@ -951,7 +991,7 @@ function generateHolders(m: Market) {
       isAgent: i < 3,
       side: yes ? "YES" : "NO",
       shares,
-      avgPrice: yes ? m.yesPrice + (Math.random() - 0.5) * 0.1 : 1 - m.yesPrice + (Math.random() - 0.5) * 0.1,
+      avgPrice: yes ? yesPrice + (Math.random() - 0.5) * 0.1 : 1 - yesPrice + (Math.random() - 0.5) * 0.1,
       pnl: (Math.random() - 0.4) * 12,
     };
   }).sort((a, b) => b.shares - a.shares);
@@ -1007,7 +1047,7 @@ function HoldersList({ rows }: { rows: ReturnType<typeof generateHolders> }) {
   );
 }
 
-function ResolutionRules({ market }: { market: Market }) {
+function ResolutionRules({ market }: { market: ApiMarket }) {
   return (
     <div className="space-y-5">
       <p className="text-sm leading-relaxed text-foreground/90">
