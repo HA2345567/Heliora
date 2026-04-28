@@ -129,7 +129,7 @@ export default function CreateMarket() {
                       </div>
                       {resolution === r.key && <Check className="h-4 w-4" />}
                     </div>
-                    <div className="mt-3 font-display text-base">{r.key}</div>
+                    <div className="mt-3 font-display text-base">{r.label}</div>
                     <p className="mt-1 text-xs text-muted-foreground">{r.desc}</p>
                     <div className="mt-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                       Best for: {r.best}
@@ -165,9 +165,16 @@ export default function CreateMarket() {
             </Section>
 
             <div className="flex items-center justify-between border-t border-border pt-6">
-              <span className="font-mono text-xs text-muted-foreground">Network fee: ~0.000012 SOL</span>
-              <button className="inline-flex items-center gap-2 rounded-md bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-button-inset hover:opacity-90">
-                Deploy market <ArrowRight className="h-4 w-4" />
+              <span className="font-mono text-xs text-muted-foreground">
+                {connected ? "Network fee: ~0.000012 SOL" : "Connect wallet to deploy"}
+              </span>
+              <button
+                onClick={() => createMut.mutate()}
+                disabled={!connected || createMut.isPending || !question.trim()}
+                className="inline-flex items-center gap-2 rounded-md bg-foreground px-5 py-2.5 text-sm font-semibold text-background shadow-button-inset transition hover:opacity-90 disabled:opacity-50"
+              >
+                {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                {createMut.isPending ? "Deploying…" : "Deploy market"}
               </button>
             </div>
           </div>
@@ -203,7 +210,7 @@ export default function CreateMarket() {
                 <Row k="Your fee share" v="0.3% per trade" />
                 <Row k="LP fee" v="0.5%" />
                 <Row k="Protocol fee" v="0.2%" />
-                <Row k="Resolution window" v={resolution === "AI Oracle" ? "1 hour" : "1 slot"} />
+                <Row k="Resolution window" v={resolution === "AIOracle" ? "1 hour" : "1 slot"} />
                 <Row k="Idle yield routing" v="Kamino · 5.4% APY" />
               </div>
 
