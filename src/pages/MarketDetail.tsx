@@ -62,10 +62,14 @@ export default function MarketDetail() {
     return market.yesPrice - pts[0].yesPrice;
   }, [market]);
 
+  const seedYes = market?.yesPrice ?? 0.5;
+  const seedVolume = market?.volume ?? 0;
+
   // Live ticking price
-  const [livePrice, setLivePrice] = useState(market.yesPrice);
+  const [livePrice, setLivePrice] = useState(seedYes);
   const [tickDir, setTickDir] = useState<"up" | "down" | "flat">("flat");
   useEffect(() => {
+    if (!market) return;
     setLivePrice(market.yesPrice);
     const t = setInterval(() => {
       setLivePrice((p) => {
@@ -76,13 +80,13 @@ export default function MarketDetail() {
       });
     }, 1500);
     return () => clearInterval(t);
-  }, [market.id, market.yesPrice]);
+  }, [market?.id, market?.yesPrice, market]);
 
   // Trading state
   const [side, setSide] = useState<Side>("YES");
   const [orderType, setOrderType] = useState<OrderType>("Market");
   const [amount, setAmount] = useState(100);
-  const [limitPrice, setLimitPrice] = useState<number>(Math.round(market.yesPrice * 100));
+  const [limitPrice, setLimitPrice] = useState<number>(Math.round(seedYes * 100));
   const [chartMode, setChartMode] = useState<ChartMode>("Line");
   const [range, setRange] = useState<Range>("1D");
   const [tab, setTab] = useState<"orderbook" | "activity" | "holders" | "rules">("orderbook");
@@ -91,19 +95,29 @@ export default function MarketDetail() {
   const livePriceForSide = side === "YES" ? livePrice : 1 - livePrice;
   const fillPrice = orderType === "Market" ? livePriceForSide : limitPrice / 100;
   const shares = amount / Math.max(0.01, fillPrice);
-  const potential = shares; // each winning share pays $1
+  const potential = shares;
   const profit = potential - amount;
   const fee = amount * 0.01;
 
-  const candles = useMemo(() => generateCandles(market.yesPrice, market.trend, range), [market.id, market.trend, range, market.yesPrice]);
+  const candles = useMemo(() => generateCandles(seedYes, trend, range), [market?.id, trend, range, seedYes]);
   const linePoints = useMemo(() => candles.map((c) => c.close), [candles]);
   const orderbook = useMemo(() => generateOrderbook(livePrice), [livePrice]);
-  const subMarkets = useMemo(() => buildSubMarkets(market), [market]);
-  const activity = useMemo(() => generateActivity(market), [market]);
-  const holders = useMemo(() => generateHolders(market), [market]);
+  const subMarkets = useMemo(() => buildSubMarkets(seedYes, seedVolume), [seedYes, seedVolume]);
+  const activity = useMemo(() => generateActivity(seedYes), [seedYes, market?.id]);
+  const holders = useMemo(() => generateHolders(seedYes), [seedYes, market?.id]);
 
   const yesCents = Math.round(livePrice * 100);
   const noCents = 100 - yesCents;
+
+  if (isLoading || !market) {
+    return (
+      <PageShell>
+        <div className="container py-32 text-center text-sm text-muted-foreground">
+          {isError ? "Failed to load market." : "Loading market…"}
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell>
