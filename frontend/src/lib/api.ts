@@ -3,7 +3,8 @@ import type {
   ApiProtocolStats, ApiPricePoint, MarketCategory, ResolutionSource, Side, TradeKind,
 } from "./api-types";
 
-const BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:4000").replace(/\/$/, "");
+export const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+const BASE = apiBaseUrl;
 
 function getWallet(): string | null {
   return localStorage.getItem("heliora.wallet");

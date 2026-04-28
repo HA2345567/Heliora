@@ -52,6 +52,9 @@ export interface ApiTrade {
   cost: number;
   txSig?: string | null;
   createdAt: string;
+  wallet?: string | null;
+  handle?: string | null;
+  isAgent?: boolean;
   user?: { wallet: string; handle?: string | null };
 }
 
