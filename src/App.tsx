@@ -13,6 +13,8 @@ import Agents from "./pages/Agents.tsx";
 import Oracle from "./pages/Oracle.tsx";
 import Developers from "./pages/Developers.tsx";
 import Token from "./pages/Token.tsx";
+import Live from "./pages/Live.tsx";
+import Leaderboard from "./pages/Leaderboard.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient({
@@ -36,6 +38,8 @@ const App = () => (
             <Route path="/oracle" element={<Oracle />} />
             <Route path="/developers" element={<Developers />} />
             <Route path="/token" element={<Token />} />
+            <Route path="/live" element={<Live />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
