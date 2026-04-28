@@ -1,25 +1,48 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { PageShell } from "@/components/layout/PageShell";
-import { CATEGORIES, MarketCategory } from "@/lib/mock-data";
-import { ArrowLeft, ArrowRight, Brain, Calendar, Check, CheckCircle2, Coins, Database, Network, Radio, Sparkles, Zap } from "lucide-react";
-import { Link } from "react-router-dom";
+import { api } from "@/lib/api";
+import { CATEGORIES, type MarketCategory, type ResolutionSource } from "@/lib/api-types";
+import { ArrowLeft, ArrowRight, Brain, Calendar, Check, CheckCircle2, Coins, Database, Loader2, Network, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const RES = [
-  { key: "Pyth", icon: Database, desc: "Auto-resolve from on-chain price feeds. Sub-slot settlement.", best: "Crypto, FX, commodities" },
-  { key: "Switchboard", icon: Network, desc: "Custom data feeds. APIs, sports stats, analytics.", best: "DeFi metrics, sports" },
-  { key: "AI Oracle", icon: Brain, desc: "5-agent consensus with web search + reasoning.", best: "Subjective, news, social" },
-  { key: "DAO Vote", icon: CheckCircle2, desc: "PREDICT holders vote. 48h dispute window.", best: "Governance, futarchy" },
-] as const;
+const RES: { key: ResolutionSource; label: string; icon: any; desc: string; best: string }[] = [
+  { key: "Pyth", label: "Pyth", icon: Database, desc: "Auto-resolve from on-chain price feeds. Sub-slot settlement.", best: "Crypto, FX, commodities" },
+  { key: "Switchboard", label: "Switchboard", icon: Network, desc: "Custom data feeds. APIs, sports stats, analytics.", best: "DeFi metrics, sports" },
+  { key: "AIOracle", label: "AI Oracle", icon: Brain, desc: "5-agent consensus with web search + reasoning.", best: "Subjective, news, social" },
+  { key: "DAOVote", label: "DAO Vote", icon: CheckCircle2, desc: "PREDICT holders vote. 48h dispute window.", best: "Governance, futarchy" },
+];
 
 export default function CreateMarket() {
-  const [step, setStep] = useState(1);
+  const navigate = useNavigate();
+  const { connected } = useWallet();
+  const [step] = useState(1);
   const [type, setType] = useState<"binary" | "categorical">("binary");
   const [question, setQuestion] = useState("Will SOL close above $300 by July 1?");
   const [cat, setCat] = useState<MarketCategory>("Crypto");
-  const [resolution, setResolution] = useState("Pyth");
+  const [resolution, setResolution] = useState<ResolutionSource>("Pyth");
   const [seed, setSeed] = useState(500);
   const [endDate, setEndDate] = useState("2026-07-01");
+
+  const createMut = useMutation({
+    mutationFn: () =>
+      api.createMarket({
+        question,
+        category: cat,
+        resolution,
+        endsAt: new Date(endDate).toISOString(),
+        liquiditySeed: seed,
+        isLive: true,
+      }),
+    onSuccess: ({ market }) => {
+      toast.success("Market deployed");
+      navigate(`/markets/${market.id}`);
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to deploy market"),
+  });
 
   return (
     <PageShell>
