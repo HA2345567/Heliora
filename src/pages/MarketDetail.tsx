@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
-import { MARKETS, formatUsd, timeUntil, type Market } from "@/lib/mock-data";
+import { api, formatUsd, timeUntil } from "@/lib/api";
+import type { ApiMarket } from "@/lib/api-types";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -9,14 +11,12 @@ import {
   Bookmark,
   CandlestickChart,
   CheckCircle2,
-  ChevronDown,
   Clock,
   Copy,
   ExternalLink,
   Eye,
   Flame,
   LineChart as LineChartIcon,
-  Radio,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -33,9 +33,34 @@ type OrderType = "Market" | "Limit" | "Stop";
 type ChartMode = "Line" | "Candle";
 type Range = "1H" | "1D" | "1W" | "1M" | "ALL";
 
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 export default function MarketDetail() {
-  const { id } = useParams();
-  const market = useMemo(() => MARKETS.find((m) => m.id === id) ?? MARKETS[0], [id]);
+  const { id } = useParams<{ id: string }>();
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["market", id],
+    queryFn: () => api.getMarket(id!),
+    enabled: !!id,
+  });
+  const { data: relatedData } = useQuery({
+    queryKey: ["markets", "related"],
+    queryFn: () => api.listMarkets({ sort: "volume", take: 6 }),
+  });
+
+  const market = data?.market;
+  const trend = useMemo(() => {
+    if (!market) return 0;
+    const pts = market.pricePoints ?? [];
+    if (pts.length < 2) return 0;
+    return market.yesPrice - pts[0].yesPrice;
+  }, [market]);
 
   // Live ticking price
   const [livePrice, setLivePrice] = useState(market.yesPrice);
