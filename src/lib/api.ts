@@ -11,14 +11,21 @@ function getWallet(): string | null {
 
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const wallet = getWallet();
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(wallet ? { "x-wallet": wallet } : {}),
-      ...(init.headers ?? {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(wallet ? { "x-wallet": wallet } : {}),
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch {
+    // Backend unreachable — Neon/Express not deployed yet. Surface a friendly error
+    // so React Query can render an empty state instead of a stack trace.
+    throw new Error("Heliora backend offline. Deploy backend/ or use /live for Kalshi data.");
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${res.status} ${res.statusText}: ${text || path}`);
