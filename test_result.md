@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the Heliora prediction market app - verify home page, markets list, market detail page with chart, orderbook, price ticking, and AI Agents tab"
+user_problem_statement: "Build the complete backend, Solana smart contracts, and live market integration for HELIORA — an AI-native prediction market protocol. Build /markets/:marketId with live prediction chart (exactly like Polymarket), live orderbook (like Backpack), and AI agents. Full production-grade web app."
 
 frontend:
   - task: "Home page rendering"

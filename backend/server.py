@@ -101,14 +101,14 @@ Your job is to determine whether a prediction market question has resolved YES, 
 Respond ONLY with a JSON object in this exact format (no markdown, no extra text):
 {"outcome": "YES", "confidence": 0.85, "reasoning": "Brief explanation here"}
 Valid outcomes: YES, NO, INVALID. confidence must be 0.0 to 1.0."""
-        )
+        ).with_model("openai", "gpt-4.1-mini")
         prompt = f"""Prediction market question: {question}
 Resolution criteria: {resolution_detail or 'Standard resolution based on the literal question'}
 Context: {context or 'No additional context provided. Use your training knowledge.'}
 
 Based on the available information, determine if this market resolves YES, NO, or INVALID."""
-        response = await chat.send_message(UserMessage(content=prompt))
-        txt = response.content if hasattr(response, 'content') else str(response)
+        txt = await chat.send_message(UserMessage(text=prompt))
+        txt = str(txt) if txt else ""
         m = re.search(r'\{[^}]+\}', txt, re.DOTALL)
         if m:
             result = json.loads(m.group())
