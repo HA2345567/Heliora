@@ -991,7 +991,7 @@ function generateHolders(yesPrice: number) {
       isAgent: i < 3,
       side: yes ? "YES" : "NO",
       shares,
-      avgPrice: yes ? m.yesPrice + (Math.random() - 0.5) * 0.1 : 1 - m.yesPrice + (Math.random() - 0.5) * 0.1,
+      avgPrice: yes ? yesPrice + (Math.random() - 0.5) * 0.1 : 1 - yesPrice + (Math.random() - 0.5) * 0.1,
       pnl: (Math.random() - 0.4) * 12,
     };
   }).sort((a, b) => b.shares - a.shares);
