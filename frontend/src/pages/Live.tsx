@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { PageShell } from "@/components/layout/PageShell";
-import { kalshi, centsToProb, categorize, trend, type KalshiMarket } from "@/lib/kalshi";
 import { Activity, ArrowDown, ArrowRight, ArrowUp, Radio, Search, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { KalshiMarketLive } from "@/lib/api-types";
 
 const CATS = ["All", "Crypto", "Politics", "Sports", "Economy", "Culture", "Weather", "Other"] as const;
 
@@ -27,23 +29,24 @@ export default function Live() {
   const [q, setQ] = useState("");
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch, isFetching } = useQuery({
-    queryKey: ["kalshi", "markets"],
-    queryFn: () => kalshi.listMarkets({ status: "open", limit: 100 }),
-    refetchInterval: 15_000,           // poll every 15s — feels live, kind to upstream
+    queryKey: ["live", "markets"],
+    queryFn: () => api.liveMarkets({ status: "open", limit: 100 }),
+    refetchInterval: 15_000,           // poll every 15s
     refetchIntervalInBackground: false,
   });
 
   const markets = data?.markets ?? [];
   const filtered = useMemo(() => {
     return markets.filter((m) => {
-      if (cat !== "All" && categorize(m) !== cat) return false;
+      if (cat !== "All" && m.category !== cat) return false;
       if (q && !`${m.title} ${m.event_ticker}`.toLowerCase().includes(q.toLowerCase())) return false;
       return true;
     });
   }, [markets, cat, q]);
 
-  const totalVol = markets.reduce((s, m) => s + (m.volume_24h ?? 0), 0) / 100; // cents → USD
-  const totalLiq = markets.reduce((s, m) => s + (m.liquidity ?? 0), 0) / 100;
+  const totalVol = data?.meta?.totalVolume ?? 0;
+  const totalLiq = data?.meta?.totalLiquidity ?? 0;
+  const cacheAge = data?.meta?.cacheAge ?? 0;
 
   return (
     <PageShell>
@@ -66,7 +69,7 @@ export default function Live() {
             <Stat label="Open markets" value={String(markets.length)} />
             <Stat label="24h volume" value={fmtUsd(totalVol)} />
             <Stat label="Liquidity" value={fmtUsd(totalLiq)} />
-            <Stat label="Last sync" value={dataUpdatedAt ? `${Math.max(1, Math.floor((Date.now() - dataUpdatedAt) / 1000))}s ago` : "—"} />
+            <Stat label="Cache age" value={`${Math.max(0, Math.floor(cacheAge / 1000))}s`} />
           </div>
         </div>
       </section>
@@ -118,7 +121,7 @@ export default function Live() {
           </div>
         ) : isError ? (
           <div className="rounded-2xl border border-dashed border-destructive/40 py-16 text-center">
-            <p className="text-sm text-destructive">Couldn't reach Kalshi proxy</p>
+            <p className="text-sm text-destructive">Couldn't reach Heliora API</p>
             <p className="mt-1 font-mono text-xs text-muted-foreground">{(error as Error).message}</p>
           </div>
         ) : filtered.length === 0 ? (
@@ -144,17 +147,17 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function KalshiCard({ m }: { m: KalshiMarket }) {
-  const yesProb = centsToProb(m.yes_bid);
-  const tr = trend(m);
+function KalshiCard({ m }: { m: KalshiMarketLive }) {
+  const yesProb = m.yes_prob;
+  const tr = m.trend;
   const TrIcon = tr === "up" ? ArrowUp : tr === "down" ? ArrowDown : ArrowRight;
   const trColor = tr === "up" ? "text-success" : tr === "down" ? "text-destructive" : "text-muted-foreground";
 
   return (
-    <div className="group flex flex-col rounded-2xl border border-border bg-surface p-5 shadow-ring transition hover:bg-surface-elevated">
+    <Link to={`/live/${m.ticker}`} className="group flex flex-col rounded-2xl border border-border bg-surface p-5 shadow-ring transition hover:bg-surface-elevated active:scale-[0.98]">
       <div className="flex items-start justify-between gap-3">
         <span className="rounded-full border border-border bg-background px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-          {categorize(m)}
+          {m.category}
         </span>
         <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase text-success">
           <Zap className="h-2.5 w-2.5" /> Kalshi
@@ -186,6 +189,6 @@ function KalshiCard({ m }: { m: KalshiMarket }) {
         <span>{fmtUsd((m.liquidity ?? 0) / 100)} liq</span>
         <span>{timeUntil(m.close_time)}</span>
       </div>
-    </div>
+    </Link>
   );
 }

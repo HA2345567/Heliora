@@ -84,7 +84,7 @@
   /* Display font — Cal Sans loaded via cdnfonts */
   .font-display,
   h1, h2, h3, h4 {
-    font-family: "Cal Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Cal Sans", "Outfit", "Inter", ui-sans-serif, system-ui, sans-serif;
     letter-spacing: -0.015em;
   }
 

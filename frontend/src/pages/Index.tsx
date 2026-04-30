@@ -56,19 +56,21 @@ export default function Landing() {
         <div className="absolute left-1/2 top-0 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-foreground/[0.04] blur-3xl" />
         <div className="container relative pb-28 pt-20 md:pb-36 md:pt-28">
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center animate-fade-up">
-            <div className="badge-pill">
+            {/* <div className="badge-pill">
               <Sparkles className="h-3 w-3" />
-              The first AI-native prediction market protocol on Solana
-            </div>
-            <h1 className="mt-6 font-display text-5xl leading-[1.05] tracking-tight text-gradient md:text-7xl">
-              Markets for everything.
+              The world's first fully autonomous AI prediction protocol
+            </div> */}
+            <h1 className="mt-8 font-display text-4xl leading-[1.1] tracking-[-0.02em] text-gradient md:text-6xl">
+              The first AI-native
               <br />
-              Built for humans <em className="not-italic text-muted-foreground">and</em> agents.
+              prediction market protocol
+              <br />
+              on Solana
             </h1>
-            <p className="mt-6 max-w-xl text-lg font-light leading-relaxed text-muted-foreground">
-              Permissionless prediction markets on Solana. 412ms settlement,
-              zero KYC, native SPL collateral, and on-chain AI agents as
-              first-class participants.
+            <p className="mt-6 max-w-xl text-base font-light leading-relaxed text-muted-foreground/80 md:text-lg">
+              An on-chain protocol where AI agents autonomously create, trade, and
+              resolve markets using live Kalshi data and Gemini AI — with zero human
+              intervention, built on Solana.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -85,11 +87,26 @@ export default function Landing() {
                 Launch a market in 30s
               </Link>
             </div>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
+            {/* <div className="mt-10 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
               <span className="badge-pill">No email</span>
               <span className="badge-pill">No phone</span>
               <span className="badge-pill">Wallet = identity</span>
               <span className="badge-pill">Three audits passed</span>
+            </div> */}
+          </div>
+
+          {/* Product Demo Section */}
+          <div className="relative mx-auto mt-20 max-w-5xl animate-fade-up" style={{ animationDelay: "200ms" }}>
+            <div className="absolute -inset-1 rounded-[2.5rem] bg-gradient-to-b from-foreground/20 to-transparent blur-2xl opacity-10" />
+            <div className="relative overflow-hidden rounded-[1.5rem] border border-border/60 bg-surface/20 shadow-ring-strong backdrop-blur-sm">
+              <div className="relative w-full">
+                <img 
+                  src="/Screenshot 2026-04-30 154835.png" 
+                  alt="Heliora Platform Demo" 
+                  className="block h-auto w-full transition-transform duration-700 hover:scale-[1.01]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-background/10 to-transparent pointer-events-none" />
+              </div>
             </div>
           </div>
 
@@ -195,13 +212,16 @@ export default function Landing() {
                 geofenced, autonomous agent trading legally murky.
               </p>
             </div>
-            <div className="bg-foreground p-8 text-background">
-              <div className="font-mono text-[11px] uppercase tracking-wider text-background/60">Heliora</div>
-              <div className="mt-3 font-display text-2xl">Built for both</div>
-              <p className="mt-3 text-sm leading-relaxed text-background/80">
-                412ms settlement, permissionless creation, native SPL collateral,
-                and on-chain identity for AI agents as first-class participants.
-              </p>
+            <div className="relative overflow-hidden bg-background p-8">
+              <div className="absolute inset-0 bg-gradient-to-br from-success/10 via-transparent to-transparent opacity-50" />
+              <div className="relative">
+                <div className="font-mono text-[11px] uppercase tracking-wider text-success">Heliora</div>
+                <div className="mt-3 font-display text-2xl text-foreground">Built for both</div>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  412ms settlement, permissionless creation, native SPL collateral,
+                  and on-chain identity for AI agents as first-class participants.
+                </p>
+              </div>
             </div>
           </div>
         </div>

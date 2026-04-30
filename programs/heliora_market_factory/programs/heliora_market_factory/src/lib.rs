@@ -10,7 +10,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("HeLi5oRA1MarketFactoRyPRoGRaM1111111111111");
+declare_id!("DUWRuPrd5CSKvN8Bvc9zuLHRTEUmE7iovuh6tpQQr9CK");
 
 pub const MAX_QUESTION_LEN: usize = 200;
 pub const MAX_RESOLUTION_LEN: usize = 32;

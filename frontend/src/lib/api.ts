@@ -1,6 +1,8 @@
 import type {
   ApiMarket, ApiTrade, ApiPosition, ApiAgent, ApiOracleResolution,
   ApiProtocolStats, ApiPricePoint, MarketCategory, ResolutionSource, Side, TradeKind,
+  ApiLiveMarketsResponse, ApiLiveMarketDetail, ApiCandlesticksResponse,
+  ApiAgentDetailResponse, ApiAgentPerformanceResponse, ApiComment,
 } from "./api-types";
 
 export const apiBaseUrl = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
@@ -68,6 +70,13 @@ export const api = {
     liquiditySeed?: number;
     isLive?: boolean;
   }) => req<{ market: ApiMarket }>("/api/markets", { method: "POST", body: JSON.stringify(body) }),
+  getComments: (marketId: string) =>
+    req<{ comments: ApiComment[] }>(`/api/markets/${marketId}/comments`),
+  postComment: (marketId: string, body: { text: string; wallet?: string; isAgent?: boolean }) =>
+    req<{ comment: ApiComment }>(`/api/markets/${marketId}/comments`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   // Trades
   placeTrade: (body: {
@@ -89,13 +98,43 @@ export const api = {
     }>("/api/portfolio"),
 
   // Agents
-  listAgents: () => req<{ agents: ApiAgent[] }>("/api/agents"),
-  getAgent: (id: string) => req<{ agent: ApiAgent }>(`/api/agents/${id}`),
+  listAgents: (params?: { type?: string; status?: "live" | "paused"; sort?: "aum" | "pnl" | "winRate" | "sharpe"; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => v !== undefined && qs.set(k, String(v)));
+    }
+    return req<{ agents: ApiAgent[] }>(`/api/agents?${qs.toString()}`);
+  },
+  getAgent: (id: string) => req<ApiAgentDetailResponse>(`/api/agents/${id}`),
+  getAgentPerformance: (id: string, period: "7d" | "30d" | "90d" | "all" = "30d") =>
+    req<ApiAgentPerformanceResponse>(`/api/agents/${id}/performance?period=${period}`),
   subscribeAgent: (id: string, capital: number) =>
     req<{ subscription: unknown }>(`/api/agents/${id}/subscribe`, {
       method: "POST",
       body: JSON.stringify({ capital }),
     }),
+
+  // Live Markets (Kalshi)
+  liveMarkets: (params?: {
+    status?: "open" | "closed" | "settled" | "active" | "all";
+    limit?: number;
+    offset?: number;
+    sort?: "volume" | "ending" | "liquidity" | "newest";
+    search?: string;
+    category?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => v !== undefined && qs.set(k, String(v)));
+    }
+    return req<ApiLiveMarketsResponse>(`/api/live?${qs.toString()}`);
+  },
+  getLiveMarket: (ticker: string) =>
+    req<ApiLiveMarketDetail>(`/api/live/${ticker}`),
+  getLiveMarketCandlesticks: (ticker: string, interval: "1m" | "5m" | "1h" | "1d" = "1h", limit: number = 100) =>
+    req<ApiCandlesticksResponse>(`/api/live/candlesticks/${ticker}?interval=${interval}&limit=${limit}`),
+  liveHealthStatus: () =>
+    req<{ status: string; markets_available: boolean; cache: unknown; timestamp: string }>("/api/live/health/status"),
 
   // Oracle
   recentResolutions: () =>
@@ -112,15 +151,29 @@ export const api = {
     req<{ leaderboard: { wallet: string; handle?: string | null; pnl: number; positions: number }[] }>(
       "/api/stats/leaderboard",
     ),
+
+  // Social (Watchlist & Alerts)
+  toggleWatchlist: (marketId: string) =>
+    req<{ status: "added" | "removed"; marketId: string }>("/api/social/watchlist/toggle", {
+      method: "POST",
+      body: JSON.stringify({ marketId }),
+    }),
+  getWatchlist: () => req<{ markets: ApiMarket[] }>("/api/social/watchlist"),
+  setAlert: (body: { marketId: string; type: string; threshold?: number }) =>
+    req<{ alert: unknown }>("/api/social/alerts", { method: "POST", body: JSON.stringify(body) }),
+  getAlerts: () => req<{ alerts: unknown[] }>("/api/social/alerts"),
+  deleteAlert: (id: string) => req<{ success: boolean }>(`/api/social/alerts/${id}`, { method: "DELETE" }),
 };
 
 // Display helpers (kept here to avoid duplication across pages)
-export function formatUsd(n: number) {
+export function formatUsd(n: number | undefined | null) {
+  if (n === undefined || n === null) return "$0";
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
   return `$${n.toFixed(0)}`;
 }
-export function formatNum(n: number) {
+export function formatNum(n: number | undefined | null) {
+  if (n === undefined || n === null) return "0";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return `${n}`;

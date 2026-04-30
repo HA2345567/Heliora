@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useHelioraWallet } from "@/components/wallet/useHelioraWallet";
 import { PageShell } from "@/components/layout/PageShell";
 import { api, apiBaseUrl, formatUsd, timeUntil } from "@/lib/api";
 import type { ApiMarket, ApiPricePoint, ApiTrade } from "@/lib/api-types";
@@ -117,6 +119,44 @@ export default function MarketDetail() {
   }, [pricePoints, market?.yesPrice]);
 
   const seedYes = market?.yesPrice ?? 0.5;
+  const queryClient = useQueryClient();
+
+  // ─── Social Actions (Watchlist/Alerts)
+  const { data: watchlistData } = useQuery({
+    queryKey: ["watchlist"],
+    queryFn: () => api.getWatchlist(),
+    enabled: !!id,
+  });
+
+  const isWatched = useMemo(() => {
+    return watchlistData?.markets.some((m) => m.id === id);
+  }, [watchlistData, id]);
+
+  const toggleWatchlist = useMutation({
+    mutationFn: () => api.toggleWatchlist(id!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+    },
+  });
+
+  const [copyStatus, setCopyStatus] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopyStatus(true);
+    setTimeout(() => setCopyStatus(false), 2000);
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: market?.question || "Heliora Market",
+        url: window.location.href,
+      });
+    } else {
+      handleCopy();
+    }
+  };
 
   // ─── Live price (WebSocket + polling fallback)
   const [livePrice, setLivePrice] = useState(seedYes);
@@ -480,6 +520,9 @@ export default function MarketDetail() {
                   {tab === "rules" && <ResolutionRules market={market} />}
                 </div>
               </div>
+
+              {/* Comment Section */}
+              <CommentSection marketId={market.id} />
             </div>
 
             {/* RIGHT — Trading panel + side cards */}
@@ -822,7 +865,8 @@ function buildCandlesFromPoints(pts: ApiPricePoint[], live: number): Candle[] {
     const prev = pts[i];
     const o = prev.yesPrice;
     const c = curr.yesPrice;
-    const variance = Math.abs(c - o) * 0.5 + 0.003;
+    // Lower artificial volatility since Y-axis is now auto-scaled
+    const variance = Math.abs(c - o) * 0.2 + 0.002 + Math.random() * 0.002;
     const h = Math.min(0.99, Math.max(o, c) + Math.random() * variance);
     const l = Math.max(0.01, Math.min(o, c) - Math.random() * variance);
     return { o, h, l, c, close: c };
@@ -851,50 +895,91 @@ function generateCandles(end: number, trend: number, range: Range): Candle[] {
 }
 
 function CandleChart({ candles, live }: { candles: Candle[]; live: number }) {
-  const W = 800, H = 340, PAD = 20;
-  const lastY = PAD + (1 - live) * (H - PAD * 2);
+  const [zoom, setZoom] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const H = 340, PAD = 20;
+  const W = 800 * zoom;
   const cw = (W - PAD * 2) / Math.max(1, candles.length);
 
+  // Auto-scale Y-axis
+  const minC = candles.length ? Math.min(...candles.map(c => c.l)) : live;
+  const maxC = candles.length ? Math.max(...candles.map(c => c.h)) : live;
+  const minP = Math.min(minC, live);
+  const maxP = Math.max(maxC, live);
+  
+  let span = Math.max(0.02, maxP - minP);
+  const domainMin = Math.max(0, minP - span * 0.15);
+  const domainMax = Math.min(1, maxP + span * 0.15);
+  span = domainMax - domainMin;
+  
+  const scaleY = (p: number) => PAD + (1 - (p - domainMin) / span) * (H - PAD * 2);
+  const lastY = scaleY(live);
+
+  // Dynamic grid lines
+  const gridLines = [
+    domainMin + span * 0.2,
+    domainMin + span * 0.4,
+    domainMin + span * 0.6,
+    domainMin + span * 0.8,
+  ];
+
+  // Auto-scroll to the right edge whenever zoom or data changes
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollLeft = containerRef.current.scrollWidth;
+    }
+  }, [zoom, candles.length]);
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full">
-      {/* Grid */}
-      {[0.2, 0.4, 0.6, 0.8].map((y) => (
-        <line key={y} x1={PAD} x2={W - PAD} y1={PAD + y * (H - PAD * 2)} y2={PAD + y * (H - PAD * 2)} stroke="hsl(0 0% 100% / 0.05)" strokeDasharray="3 6" />
-      ))}
-      {/* Price labels */}
-      {[0.25, 0.5, 0.75].map((y) => (
-        <text key={`t-${y}`} x={W - PAD - 2} y={PAD + y * (H - PAD * 2) - 3} fontSize="9" fill="hsl(0 0% 48%)" textAnchor="end" fontFamily="JetBrains Mono">
-          {Math.round((1 - y) * 100)}¢
-        </text>
-      ))}
-      {/* 50¢ line */}
-      <line x1={PAD} x2={W - PAD} y1={PAD + 0.5 * (H - PAD * 2)} y2={PAD + 0.5 * (H - PAD * 2)} stroke="hsl(0 0% 100% / 0.10)" strokeDasharray="3 6" />
-      {/* Candles */}
-      {candles.map((k, i) => {
-        const x = PAD + i * cw + cw / 2;
-        const yH = PAD + (1 - k.h) * (H - PAD * 2);
-        const yL = PAD + (1 - k.l) * (H - PAD * 2);
-        const yO = PAD + (1 - k.o) * (H - PAD * 2);
-        const yC = PAD + (1 - k.c) * (H - PAD * 2);
-        const up = k.c >= k.o;
-        const color = up ? "hsl(142 71% 45%)" : "hsl(0 84% 60%)";
-        const bodyTop = Math.min(yO, yC);
-        const bodyH = Math.max(1.5, Math.abs(yO - yC));
-        const bw = Math.max(2, cw * 0.6);
-        return (
-          <g key={i}>
-            <line x1={x} x2={x} y1={yH} y2={yL} stroke={color} strokeWidth="1" opacity="0.85" />
-            <rect x={x - bw / 2} y={bodyTop} width={bw} height={bodyH} fill={color} opacity={up ? 0.9 : 0.85} rx="0.5" />
-          </g>
-        );
-      })}
-      {/* Live price line */}
-      <line x1={PAD} x2={W - PAD} y1={lastY} y2={lastY} stroke="hsl(0 0% 100% / 0.35)" strokeDasharray="3 4" />
-      <rect x={W - PAD - 42} y={lastY - 10} width="40" height="20" fill="hsl(0 0% 100%)" rx="3" opacity="0.9" />
-      <text x={W - PAD - 22} y={lastY + 4} fontSize="10" textAnchor="middle" fill="hsl(0 0% 0%)" fontFamily="JetBrains Mono" fontWeight="700">
-        {(live * 100).toFixed(1)}¢
-      </text>
-    </svg>
+    <div className="relative h-full w-full bg-background group">
+      {/* Zoom Controls */}
+      <div className="absolute right-4 top-4 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 rounded border border-border/50 bg-surface/80 p-1 backdrop-blur shadow">
+        <button onClick={() => setZoom(z => Math.max(1, z - 0.5))} className="flex h-6 w-6 items-center justify-center rounded hover:bg-surface-hover text-muted-foreground transition">-</button>
+        <span className="flex h-6 w-10 items-center justify-center text-[10px] font-mono text-muted-foreground">{Math.round(zoom * 100)}%</span>
+        <button onClick={() => setZoom(z => Math.min(10, z + 0.5))} className="flex h-6 w-6 items-center justify-center rounded hover:bg-surface-hover text-muted-foreground transition">+</button>
+      </div>
+
+      <div ref={containerRef} className="h-full w-full overflow-x-auto overflow-y-hidden custom-scrollbar">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ minWidth: "100%", width: W, height: "100%" }}>
+          {/* Grid */}
+          {gridLines.map((yVal, idx) => (
+            <line key={`gl-${idx}`} x1={PAD} x2={W - PAD} y1={scaleY(yVal)} y2={scaleY(yVal)} stroke="hsl(0 0% 100% / 0.05)" strokeDasharray="3 6" />
+          ))}
+          {/* Price labels (pinned to right edge area) */}
+          {gridLines.map((yVal, idx) => (
+            <text key={`gt-${idx}`} x={W - PAD - 2} y={scaleY(yVal) - 3} fontSize="9" fill="hsl(0 0% 48%)" textAnchor="end" fontFamily="JetBrains Mono">
+              {Math.round(yVal * 100)}¢
+            </text>
+          ))}
+          {/* Candles */}
+          {candles.map((k, i) => {
+            const x = PAD + i * cw + cw / 2;
+            const yH = scaleY(k.h);
+            const yL = scaleY(k.l);
+            const yO = scaleY(k.o);
+            const yC = scaleY(k.c);
+            const up = k.c >= k.o;
+            const color = up ? "hsl(142 71% 45%)" : "hsl(0 84% 60%)";
+            const bodyTop = Math.min(yO, yC);
+            const bodyH = Math.max(4, Math.abs(yO - yC));
+            const bw = Math.max(3, cw * 0.7);
+            return (
+              <g key={i}>
+                <line x1={x} x2={x} y1={yH} y2={yL} stroke={color} strokeWidth="1.5" opacity="0.85" />
+                <rect x={x - bw / 2} y={bodyTop} width={bw} height={bodyH} fill={color} opacity={up ? 0.9 : 0.85} rx="1" />
+              </g>
+            );
+          })}
+          {/* Live price line */}
+          <line x1={PAD} x2={W - PAD} y1={lastY} y2={lastY} stroke="hsl(0 0% 100% / 0.35)" strokeDasharray="3 4" />
+          <rect x={W - PAD - 42} y={lastY - 10} width="40" height="20" fill="hsl(0 0% 100%)" rx="3" opacity="0.9" />
+          <text x={W - PAD - 22} y={lastY + 4} fontSize="10" textAnchor="middle" fill="hsl(0 0% 0%)" fontFamily="JetBrains Mono" fontWeight="700">
+            {(live * 100).toFixed(1)}¢
+          </text>
+        </svg>
+      </div>
+    </div>
   );
 }
 
@@ -1284,6 +1369,103 @@ function ResolutionRules({ market }: { market: ApiMarket }) {
         <button className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           View report <ExternalLink className="h-3 w-3" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== Comment Section ============================== */
+
+function CommentSection({ marketId }: { marketId: string }) {
+  const { address, connected } = useHelioraWallet();
+  const queryClient = useQueryClient();
+  const [newComment, setNewComment] = useState("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["comments", marketId],
+    queryFn: () => api.getComments(marketId),
+    enabled: !!marketId,
+    refetchInterval: 10000,
+  });
+
+  const postMutation = useMutation({
+    mutationFn: (text: string) =>
+      api.postComment(marketId, {
+        text,
+        wallet: address ?? undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["comments", marketId] });
+      setNewComment("");
+    },
+  });
+
+  const handlePost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim() || postMutation.isPending) return;
+    postMutation.mutate(newComment.trim());
+  };
+
+  const comments = data?.comments ?? [];
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface shadow-ring">
+      <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+        <h3 className="font-display text-lg">Discussion</h3>
+        <span className="rounded bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          {isLoading ? "..." : comments.length}
+        </span>
+      </div>
+      <div className="p-5">
+        <form onSubmit={handlePost} className="mb-6 flex gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background">
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <div className="flex-1 space-y-3">
+            <textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder={connected ? "What are your thoughts on this market?" : "Connect wallet to comment"}
+              disabled={!connected || postMutation.isPending}
+              className="w-full resize-none rounded-xl border border-border bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none focus:ring-1 focus:ring-foreground/30 disabled:opacity-50"
+              rows={2}
+            />
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={!newComment.trim() || !connected || postMutation.isPending}
+                className="rounded-md bg-foreground px-4 py-2 text-xs font-semibold text-background shadow transition hover:opacity-90 disabled:opacity-50"
+              >
+                {postMutation.isPending ? "Posting..." : "Post Comment"}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div className="space-y-5">
+          {isLoading && comments.length === 0 && (
+            <div className="py-4 text-center text-sm text-muted-foreground">Loading discussion...</div>
+          )}
+          {!isLoading && comments.length === 0 && (
+            <div className="py-4 text-center text-sm text-muted-foreground">No comments yet. Be the first to join the discussion!</div>
+          )}
+          {comments.map((c) => (
+            <div key={c.id} className="flex gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-background">
+                {c.isAgent ? <Bot className="h-4 w-4 text-foreground" /> : <Users className="h-4 w-4 text-muted-foreground" />}
+              </div>
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-sm text-foreground/90">
+                    {c.wallet ? `${c.wallet.slice(0, 4)}...${c.wallet.slice(-4)}` : "anon"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{timeAgo(c.createdAt)}</span>
+                </div>
+                <p className="text-sm leading-relaxed text-muted-foreground">{c.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

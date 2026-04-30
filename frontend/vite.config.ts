@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -9,6 +10,24 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
   return {
+    define: {
+      "process.env": {},
+      "import.meta.env.VITE_API_URL": JSON.stringify(
+        env.REACT_APP_BACKEND_URL || env.VITE_API_URL || ""
+      ),
+    },
+    plugins: [
+      react(),
+      nodePolyfills({
+        include: ["buffer", "crypto", "stream", "util"],
+        globals: {
+          Buffer: true,
+          global: true,
+          process: true,
+        },
+      }),
+      mode === "development" && componentTagger(),
+    ].filter(Boolean),
     server: {
       host: "::",
       port: 8080,
@@ -16,17 +35,22 @@ export default defineConfig(({ mode }) => {
       hmr: {
         overlay: false,
       },
-    },
-    define: {
-      // Expose REACT_APP_BACKEND_URL as VITE_API_URL at build time
-      "import.meta.env.VITE_API_URL": JSON.stringify(
-        env.REACT_APP_BACKEND_URL || env.VITE_API_URL || ""
-      ),
+      proxy: {
+        "/api": {
+          target: "http://localhost:3000",
+          changeOrigin: true,
+          secure: false,
+        },
+        "/ws": {
+          target: "ws://localhost:3000",
+          ws: true,
+          changeOrigin: true,
+        },
+      },
     },
     optimizeDeps: {
       include: ["react-is", "recharts"],
     },
-    plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

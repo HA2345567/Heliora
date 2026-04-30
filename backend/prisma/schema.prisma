@@ -1,0 +1,231 @@
+// Prediction Market Platform Schema
+// YES/NO market mechanics with user positions and oracle resolution
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id                String         @id @default(uuid())
+  name              String
+  handle            String         @unique
+  wallet            String         @unique
+  type              String         @default("Sentiment") // Sentiment, Arbitrage, MarketMaker, NewsAlpha, Momentum
+  description       String?
+  status            String         @default("live") // live, inactive, paused
+  aum               Float          @default(0) // Assets Under Management
+  pnl30d            Float          @default(0) // 30-day PnL percentage
+  winRate           Float          @default(0)
+  sharpe            Float          @default(0)
+  maxDrawdown       Float          @default(0)
+  performanceFee    Float          @default(10) // percentage
+  uptime            Float          @default(100) // percentage
+  marketsTraded     Int            @default(0)
+  subscriptionCount Int            @default(0)
+  config            String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  subscriptions     Subscription[]
+  trades            Trade[]
+
+  @@index([status])
+  @@index([type])
+  @@map("agents")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  wallet    String   @unique
+  handle    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  positions Position[]
+  trades    Trade[]
+  comments  Comment[]
+  watchlist Watchlist[]
+  alerts    Alert[]
+
+  @@map("users")
+}
+
+model Market {
+  id                String         @id @default(uuid())
+  question          String
+  description       String?
+  category          String
+  resolution        String?
+  resolutionDetail  String?
+  status            String         @default("open") // open, resolved, disputed
+  outcome           String?        // YES, NO, INVALID, DISPUTED
+  yesPrice          Float          @default(0.5)
+  noPrice           Float          @default(0.5)
+  liquidity         Float          @default(500)
+  volume            Float          @default(0)
+  participants      Int            @default(0)
+  isLive            Boolean        @default(false)
+  endsAt            DateTime
+  createdAt         DateTime       @default(now())
+  resolvedAt        DateTime?
+  updatedAt         DateTime       @updatedAt
+  creator           String // JSON string
+  pricePoints       PricePoint[]
+  trades            Trade[]
+  positions         Position[]
+  comments          Comment[]
+  watchlist         Watchlist[]
+  alerts            Alert[]
+  oracleResolution  OracleResolution?
+
+  @@index([status])
+  @@index([endsAt])
+  @@index([isLive])
+  @@map("markets")
+}
+
+model PricePoint {
+  id        String   @id @default(uuid())
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  yesPrice  Float
+  noPrice   Float
+  ts        DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([marketId])
+  @@index([ts])
+  @@map("price_points")
+}
+
+model Trade {
+  id        String   @id @default(uuid())
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentId   String?
+  agent     Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  wallet    String
+  handle    String?
+  isAgent   Boolean  @default(false)
+  side      String   // YES or NO
+  kind      String   @default("market") // market, limit
+  shares    Float
+  price     Float
+  cost      Float
+  fee       Float
+  txSig     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([marketId])
+  @@index([userId])
+  @@index([agentId])
+  @@index([createdAt])
+  @@map("trades")
+}
+
+model Position {
+  id           String   @id @default(uuid())
+  marketId     String
+  market       Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  yesShares    Float    @default(0)
+  noShares     Float    @default(0)
+  avgYesCost   Float    @default(0)
+  avgNoCost    Float    @default(0)
+  realizedPnl  Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([marketId, userId])
+  @@index([userId])
+  @@map("positions")
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  userId    String
+  capital   Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, userId])
+  @@index([agentId])
+  @@index([userId])
+  @@map("subscriptions")
+}
+
+model OracleResolution {
+  id                    String   @id @default(uuid())
+  marketId              String   @unique
+  market                Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  outcome               String   // YES, NO, INVALID, DISPUTED
+  consensus             Int      // number of votes for winning outcome
+  totalVotes            Int
+  tally                 String?
+  weightedConfidence    String?
+  averageConfidence     Float
+  consensusThreshold    Int      @default(3)
+  isDisputed            Boolean  @default(false)
+  reasoning             String
+  votes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([marketId])
+  @@map("oracle_resolutions")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet    String?  // Store wallet directly if no user profile
+  text      String
+  isAgent   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([marketId])
+  @@index([createdAt])
+  @@map("comments")
+}
+
+model Watchlist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, marketId])
+  @@map("watchlist")
+}
+
+model Alert {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marketId    String
+  market      Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  type        String   // "price_above", "price_below", "resolved"
+  threshold   Float?
+  isActive    Boolean  @default(true)
+  triggered   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("alerts")
+}
+

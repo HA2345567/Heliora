@@ -66,6 +66,8 @@ export function ConnectWalletButton({ className }: { className?: string }) {
     setConnecting(walletName);
     try {
       select(walletName);
+      // Give the adapter a moment to select the wallet
+      await new Promise((r) => setTimeout(r, 100));
       await connect();
       setOpen(false);
     } catch (e) {
@@ -76,7 +78,7 @@ export function ConnectWalletButton({ className }: { className?: string }) {
   };
 
   const handleBackpack = async () => {
-    const bp = (window as Record<string, unknown>).backpack as {
+    const bp = (window as unknown as Record<string, unknown>).backpack as {
       connect(): Promise<{ publicKey: { toString(): string } }>;
     } | undefined;
     if (!bp) {

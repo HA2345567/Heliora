@@ -1,0 +1,10 @@
+{
+  "name": "heliora-monorepo",
+  "private": true,
+  "scripts": {
+    "install:all": "bun install --cwd frontend && bun install --cwd backend",
+    "dev": "bun run --cwd backend dev & bun run --cwd frontend dev",
+    "dev:backend": "bun run --cwd backend dev",
+    "dev:frontend": "bun run --cwd frontend dev"
+  }
+}

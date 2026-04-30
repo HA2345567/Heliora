@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
 import { api, formatUsd } from "@/lib/api";
 import type { ApiAgent } from "@/lib/api-types";
 import { Bot, Brain, Cpu, Network, Search, Sparkles, TrendingUp, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 const TYPES = ["All", "Sentiment", "Arbitrage", "MarketMaker", "NewsAlpha", "Momentum"] as const;
 
@@ -18,13 +20,18 @@ const ICON_BY_TYPE: Record<string, typeof Bot> = {
 
 export default function Agents() {
   const [type, setType] = useState<(typeof TYPES)[number]>("All");
+  const [search, setSearch] = useState("");
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.listAgents(),
   });
 
   const all = data?.agents ?? [];
-  const list = all.filter((a) => type === "All" || a.type === type);
+  const list = all.filter((a) => {
+    const matchesType = type === "All" || a.type === type;
+    const matchesSearch = a.name.toLowerCase().includes(search.toLowerCase()) || a.handle.toLowerCase().includes(search.toLowerCase());
+    return matchesType && matchesSearch;
+  });
   const totalAum = all.reduce((s, a) => s + a.aum, 0);
 
   return (
@@ -56,6 +63,8 @@ export default function Agents() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               placeholder="Search agents…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               className="h-10 w-full rounded-md border border-border bg-surface pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none"
             />
           </div>
@@ -88,6 +97,10 @@ export default function Agents() {
             <p className="text-sm">Failed to load agents</p>
             <p className="mt-1 font-mono text-xs opacity-70">{(error as Error).message}</p>
           </div>
+        ) : list.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border py-16 text-center text-muted-foreground">
+            <p className="text-sm">No agents found matching your criteria</p>
+          </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {list.map((a) => <AgentCard key={a.id} a={a} />)}
@@ -112,6 +125,26 @@ export default function Agents() {
 
 function AgentCard({ a }: { a: ApiAgent }) {
   const Icon = ICON_BY_TYPE[a.type] ?? Bot;
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const subMutation = useMutation({
+    mutationFn: (capital: number) => api.subscribeAgent(a.id, capital),
+    onSuccess: () => {
+      toast.success(`Successfully subscribed to ${a.name}!`);
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+    onError: (err: Error) => {
+      toast.error(`Subscription failed: ${err.message}`);
+    },
+  });
+
+  const handleSubscribe = () => {
+    // In a real app, this would open a modal to choose capital
+    const capital = 1000;
+    subMutation.mutate(capital);
+  };
+
   return (
     <div className="group flex flex-col rounded-2xl border border-border bg-surface p-6 shadow-ring transition hover:bg-surface-elevated">
       <div className="flex items-start justify-between">
@@ -149,8 +182,19 @@ function AgentCard({ a }: { a: ApiAgent }) {
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <button className="rounded-md border border-border bg-background py-2 text-xs font-medium hover:bg-surface-hover">View stats</button>
-        <button className="rounded-md bg-foreground py-2 text-xs font-semibold text-background shadow-button-inset hover:opacity-90">Subscribe</button>
+        <button 
+          onClick={() => navigate(`/agents/${a.id}`)}
+          className="rounded-md border border-border bg-background py-2 text-xs font-medium hover:bg-surface-hover"
+        >
+          View stats
+        </button>
+        <button 
+          onClick={handleSubscribe}
+          disabled={subMutation.isPending}
+          className="rounded-md bg-foreground py-2 text-xs font-semibold text-background shadow-button-inset hover:opacity-90 disabled:opacity-50"
+        >
+          {subMutation.isPending ? "Subscribing..." : "Subscribe"}
+        </button>
       </div>
     </div>
   );

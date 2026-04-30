@@ -21,30 +21,50 @@ export function useHelioraWallet(): HelioraWalletState {
     return localStorage.getItem("heliora.wallet");
   });
 
-  // Listen for wallet changes dispatched by ConnectWalletButton
+  // Listen for manual wallet changes (demo or backpack)
   useEffect(() => {
-    const sync = () => setDemoAddr(localStorage.getItem("heliora.wallet"));
+    const sync = () => {
+      const addr = localStorage.getItem("heliora.wallet");
+      setDemoAddr(addr);
+    };
     window.addEventListener("heliora:wallet-changed", sync);
     return () => window.removeEventListener("heliora:wallet-changed", sync);
   }, []);
 
-  // Sync real adapter wallet to localStorage
+  // Sync adapter state to localStorage and local state
   useEffect(() => {
     if (adapterConnected && publicKey) {
       const addr = publicKey.toBase58();
-      localStorage.setItem("heliora.wallet", addr);
-      setDemoAddr(addr);
-      window.dispatchEvent(new Event("heliora:wallet-changed"));
+      if (localStorage.getItem("heliora.wallet") !== addr) {
+        localStorage.setItem("heliora.wallet", addr);
+        setDemoAddr(addr);
+        window.dispatchEvent(new Event("heliora:wallet-changed"));
+      }
+    } else if (!adapterConnected && !demoAddr) {
+      // If adapter is not connected and we don't have a demo addr, 
+      // check if we should clear storage (in case of external disconnect)
+      const stored = localStorage.getItem("heliora.wallet");
+      if (stored && !stored.startsWith("demo_")) { // don't clear demo wallets
+         // We only clear if it looks like a real public key (length 32-44)
+         // or if we know it was the adapter's wallet.
+         // For simplicity, if adapter is false, we clear non-demo storage.
+         // localStorage.removeItem("heliora.wallet");
+         // setDemoAddr(null);
+      }
     }
-  }, [adapterConnected, publicKey]);
+  }, [adapterConnected, publicKey, demoAddr]);
 
   const address = adapterConnected && publicKey ? publicKey.toBase58() : demoAddr;
   const connected = !!address;
   const isDemo = !adapterConnected && !!demoAddr;
   const displayAddress = address ? `${address.slice(0, 4)}…${address.slice(-4)}` : null;
 
-  const disconnect = useCallback(() => {
-    if (adapterConnected) adapterDisconnect();
+  const disconnect = useCallback(async () => {
+    try {
+      if (adapterConnected) await adapterDisconnect();
+    } catch (e) {
+      console.error("Disconnect error:", e);
+    }
     localStorage.removeItem("heliora.wallet");
     setDemoAddr(null);
     window.dispatchEvent(new Event("heliora:wallet-changed"));
