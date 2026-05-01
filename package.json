@@ -6,5 +6,8 @@
     "dev": "bun run --cwd backend dev & bun run --cwd frontend dev",
     "dev:backend": "bun run --cwd backend dev",
     "dev:frontend": "bun run --cwd frontend dev"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
   }
 }
