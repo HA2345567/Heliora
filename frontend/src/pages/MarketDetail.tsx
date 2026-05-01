@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useHelioraWallet } from "@/components/wallet/useHelioraWallet";
 import { PageShell } from "@/components/layout/PageShell";
 import { api, apiBaseUrl, formatUsd, timeUntil } from "@/lib/api";
 import type { ApiMarket, ApiPricePoint, ApiTrade } from "@/lib/api-types";
+import * as anchor from "@coral-xyz/anchor";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { IDL } from "@/lib/idl";
+import { toast } from "sonner";
+import { Buffer } from "buffer";
 import {
   AreaChart,
   Area,
@@ -34,6 +40,7 @@ import {
   Eye,
   Flame,
   LineChart as LineChartIcon,
+  MoreHorizontal,
   Share2,
   ShieldCheck,
   Sparkles,
@@ -138,6 +145,114 @@ export default function MarketDetail() {
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
     },
   });
+
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction, signTransaction } = useWallet();
+
+  const [isBuying, setIsBuying] = useState(false);
+
+  const handleBuy = async () => {
+    if (!publicKey || !signTransaction) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+    
+    try {
+      setIsBuying(true);
+      toast.loading("Preparing transaction...", { id: "trade" });
+
+      const programId = new PublicKey("By5KbxUEFGs7NrQYLXcjmptft6yX2saVWvoA8sx7HzqT");
+      
+      // We use a mock anchor provider to build the ix
+      const provider = new anchor.AnchorProvider(
+        connection,
+        {
+          publicKey: publicKey,
+          signTransaction: signTransaction as any,
+          signAllTransactions: async (txs) => txs,
+        },
+        { preflightCommitment: "confirmed" }
+      );
+      
+      const program = new anchor.Program(IDL, provider);
+
+      // Derive PDAs - Using pure Uint8Array to avoid Buffer polyfill issues in browser
+      const idStr = id || "";
+      const cleanId = idStr.replace(/-/g, '');
+      
+      let marketIdNum = 0;
+      if (cleanId.length >= 8) {
+        // Parse the first 8 hex chars (4 bytes) as a u32
+        marketIdNum = parseInt(cleanId.slice(0, 8), 16);
+      } else {
+        // Fallback for short/non-hex IDs
+        for (let i = 0; i < idStr.length; i++) {
+          marketIdNum = ((marketIdNum << 5) - marketIdNum) + idStr.charCodeAt(i);
+          marketIdNum |= 0;
+        }
+        marketIdNum = Math.abs(marketIdNum);
+      }
+
+      const marketIdBytes = new Uint8Array(4);
+      const view = new DataView(marketIdBytes.buffer);
+      view.setUint32(0, marketIdNum, true);
+
+      const encoder = new TextEncoder();
+      const [marketPda] = PublicKey.findProgramAddressSync([encoder.encode('market'), marketIdBytes], programId);
+      const [vaultPda] = PublicKey.findProgramAddressSync([encoder.encode('vault'), marketIdBytes], programId);
+      const [outcomeAMintPda] = PublicKey.findProgramAddressSync([encoder.encode('outcome_a'), marketIdBytes], programId);
+      const [outcomeBMintPda] = PublicKey.findProgramAddressSync([encoder.encode('outcome_b'), marketIdBytes], programId);
+
+      // For Devnet testing, we use a placeholder USDC
+      const collateralMint = new PublicKey("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr");
+
+      const userCollateral = getAssociatedTokenAddressSync(collateralMint, publicKey);
+      const userOutcomeA = getAssociatedTokenAddressSync(outcomeAMintPda, publicKey);
+      const userOutcomeB = getAssociatedTokenAddressSync(outcomeBMintPda, publicKey);
+
+      const amountToBuy = new anchor.BN(amount * 1_000_000); // Assuming 6 decimals for mock USDC
+
+      const tx = await program.methods
+        .splitTokens(marketIdNum, amountToBuy)
+        .accounts({
+          market: marketPda,
+          user: publicKey,
+          userCollateral: userCollateral,
+          collateralVault: vaultPda,
+          outcomeAMint: outcomeAMintPda,
+          outcomeBMint: outcomeBMintPda,
+          userOutcomeA: userOutcomeA,
+          userOutcomeB: userOutcomeB,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .transaction();
+
+      toast.loading("Awaiting wallet approval...", { id: "trade" });
+      
+      const signature = await sendTransaction(tx, connection);
+      
+      toast.loading("Confirming on-chain...", { id: "trade" });
+      await connection.confirmTransaction(signature, "confirmed");
+
+      // Now tell backend it succeeded so DB updates
+      await api.placeTrade({
+        marketId: id!,
+        side: side,
+        kind: orderType === "Market" ? "market" : "limit",
+        shares: shares,
+        txSig: signature
+      });
+
+      toast.success(`Successfully bought $${amount} of ${side}!`, { id: "trade" });
+      queryClient.invalidateQueries({ queryKey: ["market", id] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Trade failed: ${err.message || "Unknown error"}`, { id: "trade" });
+    } finally {
+      setIsBuying(false);
+    }
+  };
 
   const [copyStatus, setCopyStatus] = useState(false);
 
@@ -246,6 +361,7 @@ export default function MarketDetail() {
   const [range, setRange] = useState<Range>("1D");
   const [tab, setTab] = useState<"orderbook" | "activity" | "holders" | "agents" | "rules">("orderbook");
   const [bookmarked, setBookmarked] = useState(false);
+  const [utilityMenuOpen, setUtilityMenuOpen] = useState(false);
 
   // ─── Derived data
   const livePriceForSide = side === "YES" ? livePrice : 1 - livePrice;
@@ -320,46 +436,75 @@ export default function MarketDetail() {
               <span className="text-border">/</span>
               <span className="font-mono text-xs text-muted-foreground/80">{market.id?.slice(0, 8)}…</span>
             </div>
-            <div className="hidden items-center gap-2 md:flex">
-              <ActionIcon onClick={() => setBookmarked((b) => !b)} active={bookmarked} icon={Bookmark} label="Watch" />
-              <ActionIcon icon={Bell} label="Alert" />
-              <ActionIcon icon={Share2} label="Share" />
-              <ActionIcon icon={Copy} label="Copy link" />
-            </div>
           </div>
 
           {/* Hero header */}
-          <header className="mt-5 rounded-2xl border border-border bg-surface/60 p-6 backdrop-blur shadow-ring">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                {market.category}
-              </span>
-              {market.isLive && (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
-                  </span>
-                  LIVE
+          <header className="mt-4 rounded-2xl border border-border bg-surface/60 p-4 backdrop-blur shadow-ring md:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-lg border border-border/70 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {market.category}
                 </span>
-              )}
-              <span className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                <ShieldCheck className="h-3 w-3" /> {market.resolution}
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-md bg-background px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                <Wifi className={cn("h-3 w-3", wsConnected ? "text-success" : "text-muted-foreground")} />
-                {wsConnected ? "Live" : "Polling"}
-              </span>
-              <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <Eye className="h-3.5 w-3.5" /> {(market.participants * 7).toLocaleString()} watching
-              </span>
+                {market.isLive && (
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
+                    </span>
+                    LIVE
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-background/80 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <ShieldCheck className="h-3 w-3" /> {market.resolution}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-background/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  <Wifi className={cn("h-3 w-3", wsConnected ? "text-success" : "text-muted-foreground")} />
+                  {wsConnected ? "Live" : "Polling"}
+                </span>
+              </div>
+              <div className="ml-auto flex items-center gap-1">
+                <div className="hidden items-center gap-1 md:flex">
+                  <ActionIcon onClick={() => setBookmarked((b) => !b)} active={bookmarked} icon={Bookmark} label="Watch" />
+                  <ActionIcon icon={Bell} label="Alert" />
+                  <ActionIcon icon={Share2} label="Share" />
+                  <ActionIcon icon={Copy} label="Copy link" />
+                </div>
+                <div className="relative md:hidden">
+                  <button
+                    onClick={() => setUtilityMenuOpen((v) => !v)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border/70 bg-background/80 text-muted-foreground transition hover:text-foreground hover:bg-background"
+                    aria-label="Market actions"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </button>
+                  {utilityMenuOpen && (
+                    <div className="absolute right-0 top-8 z-20 w-36 rounded-lg border border-border bg-background/95 p-1 shadow-ring backdrop-blur">
+                      <button onClick={() => { setBookmarked((b) => !b); setUtilityMenuOpen(false); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition hover:bg-surface hover:text-foreground">
+                        <Bookmark className="h-3.5 w-3.5" /> Watch
+                      </button>
+                      <button onClick={() => setUtilityMenuOpen(false)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition hover:bg-surface hover:text-foreground">
+                        <Bell className="h-3.5 w-3.5" /> Alert
+                      </button>
+                      <button onClick={() => setUtilityMenuOpen(false)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition hover:bg-surface hover:text-foreground">
+                        <Share2 className="h-3.5 w-3.5" /> Share
+                      </button>
+                      <button onClick={() => setUtilityMenuOpen(false)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition hover:bg-surface hover:text-foreground">
+                        <Copy className="h-3.5 w-3.5" /> Copy link
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <Eye className="h-3 w-3" /> {(market.participants * 7).toLocaleString()} watching
+                </span>
+              </div>
             </div>
 
-            <h1 className="mt-4 font-display text-2xl leading-[1.15] tracking-tight md:text-[32px]">
+            <h1 className="mt-2.5 max-w-[62ch] font-display text-xl leading-[1.2] tracking-tight md:text-2xl">
               {market.question}
             </h1>
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5" /> Ends in <span className="font-mono text-foreground/90">{timeUntil(market.endsAt)}</span>
               </span>
@@ -379,14 +524,19 @@ export default function MarketDetail() {
             </div>
 
             {/* Probability bar */}
-            <div className="mt-6">
+            <div className="relative mt-4">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -inset-x-2 -top-2 h-14 rounded-xl opacity-60"
+                style={{ background: "radial-gradient(55% 130% at 20% 50%, hsl(0 0% 100% / 0.08), transparent 75%)" }}
+              />
               <div className="flex items-end justify-between">
                 <div className="flex items-baseline gap-3">
-                  <span className="font-display text-5xl tabular-nums text-foreground">
+                  <span className="font-display text-4xl tabular-nums text-foreground">
                     {yesCents}
-                    <span className="text-2xl text-muted-foreground">¢</span>
+                    <span className="text-xl text-muted-foreground">¢</span>
                   </span>
-                  <span className="text-sm font-medium text-muted-foreground">YES probability</span>
+                  <span className="text-xs font-medium text-muted-foreground">YES probability</span>
                   <PriceTickPill dir={tickDir} value={trend} />
                 </div>
                 <div className="hidden text-right text-xs text-muted-foreground md:block">
@@ -395,13 +545,13 @@ export default function MarketDetail() {
                 </div>
               </div>
 
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-background ring-1 ring-inset ring-border">
+              <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-background ring-1 ring-inset ring-border">
                 <div className="flex h-full w-full">
                   <div className="h-full bg-gradient-to-r from-success/80 to-success transition-all duration-700" style={{ width: `${yesCents}%` }} />
                   <div className="h-full bg-gradient-to-r from-destructive to-destructive/80 transition-all duration-700" style={{ width: `${noCents}%` }} />
                 </div>
               </div>
-              <div className="mt-2 flex justify-between text-[11px] font-medium">
+              <div className="mt-1.5 flex justify-between text-[10px] font-medium">
                 <span className="text-success">YES · {yesCents}%</span>
                 <span className="text-destructive">{noCents}% · NO</span>
               </div>
@@ -529,14 +679,14 @@ export default function MarketDetail() {
             <aside className="space-y-5 lg:sticky lg:top-20 lg:self-start">
               {/* Order ticket */}
               <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-ring-strong">
-                <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-                  <div className="font-display text-lg">Place order</div>
+                <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                  <div className="font-display text-base">Place order</div>
                   <span className="badge-pill">
                     <Zap className="h-3 w-3 text-warning" /> Sub-second
                   </span>
                 </div>
 
-                <div className="space-y-4 p-5">
+                <div className="space-y-3.5 p-4">
                   {/* YES / NO toggle */}
                   <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-background p-1 ring-1 ring-inset ring-border">
                     {(["YES", "NO"] as const).map((s) => {
@@ -548,14 +698,14 @@ export default function MarketDetail() {
                           key={s}
                           onClick={() => setSide(s)}
                           className={cn(
-                            "group relative flex flex-col items-center gap-0.5 rounded-lg py-2.5 text-sm font-semibold transition-all",
+                            "group relative flex flex-col items-center gap-0.5 rounded-lg py-2 text-xs font-semibold transition-all",
                             isActive
                               ? isYes ? "bg-success/15 text-success shadow-button-inset" : "bg-destructive/15 text-destructive shadow-button-inset"
                               : "text-muted-foreground hover:text-foreground",
                           )}
                         >
-                          <span className="text-xs font-medium uppercase tracking-wider opacity-80">{s}</span>
-                          <span className="font-display text-xl tabular-nums">{(p * 100).toFixed(0)}¢</span>
+                          <span className="text-[10px] font-medium uppercase tracking-wider opacity-80">{s}</span>
+                          <span className="font-display text-lg tabular-nums">{(p * 100).toFixed(0)}¢</span>
                         </button>
                       );
                     })}
@@ -585,12 +735,12 @@ export default function MarketDetail() {
                         Balance <span className="font-mono text-foreground/80">2,480.00</span>
                       </span>
                     </div>
-                    <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 transition focus-within:border-border-strong">
+                    <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 transition focus-within:border-border-strong">
                       <input
                         type="number"
                         value={amount}
                         onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))}
-                        className="w-full bg-transparent font-display text-2xl tabular-nums text-foreground focus:outline-none"
+                        className="w-full bg-transparent font-display text-xl tabular-nums text-foreground focus:outline-none"
                       />
                       <span className="rounded-md border border-border bg-surface px-2 py-1 font-mono text-[11px]">USDC</span>
                     </div>
@@ -616,14 +766,14 @@ export default function MarketDetail() {
                       <label className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                         {orderType} price (¢)
                       </label>
-                      <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5">
+                      <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
                         <input
                           type="number"
                           min={1}
                           max={99}
                           value={limitPrice}
                           onChange={(e) => setLimitPrice(Math.min(99, Math.max(1, Number(e.target.value) || 1)))}
-                          className="w-full bg-transparent font-display text-2xl tabular-nums text-foreground focus:outline-none"
+                          className="w-full bg-transparent font-display text-xl tabular-nums text-foreground focus:outline-none"
                         />
                         <span className="rounded-md border border-border bg-surface px-2 py-1 font-mono text-[11px]">¢</span>
                       </div>
@@ -642,23 +792,25 @@ export default function MarketDetail() {
 
                   {/* CTA */}
                   <button
+                    onClick={handleBuy}
+                    disabled={isBuying}
                     className={cn(
-                      "group relative w-full overflow-hidden rounded-xl py-3.5 text-sm font-semibold shadow-button-inset transition-all active:scale-[0.99]",
+                      "group relative w-full overflow-hidden rounded-xl py-3 text-sm font-semibold shadow-button-inset transition-all active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none",
                       side === "YES" ? "bg-success text-background hover:brightness-110" : "bg-destructive text-background hover:brightness-110",
                     )}
                   >
                     <span className="relative z-10">
-                      Buy {side} · ${amount.toFixed(0)} → {potential.toFixed(2)}
+                      {isBuying ? "Executing..." : `Buy ${side} · $${amount.toFixed(0)} → ${potential.toFixed(2)}`}
                     </span>
-                    <span className="absolute inset-0 -translate-x-full bg-white/10 transition-transform duration-700 group-hover:translate-x-0" />
+                    {!isBuying && <span className="absolute inset-0 -translate-x-full bg-white/10 transition-transform duration-700 group-hover:translate-x-0" />}
                   </button>
 
-                  <button className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-background py-2.5 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+                  <button className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-background py-2 text-[11px] font-medium text-muted-foreground transition hover:text-foreground">
                     <Sparkles className="h-3.5 w-3.5" />
                     Auto-route via <span className="font-mono text-foreground/90">Pulse agent</span>
                   </button>
 
-                  <div className="flex items-start gap-2 rounded-lg bg-background/60 p-3 text-[11px] text-muted-foreground">
+                  <div className="flex items-start gap-2 rounded-lg bg-background/60 p-2.5 text-[10px] text-muted-foreground">
                     <Flame className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
                     <span>
                       Idle USDC auto-routes to <span className="font-mono text-foreground/80">Kamino</span> earning
@@ -669,7 +821,7 @@ export default function MarketDetail() {
               </div>
 
               {/* Sub-predictions */}
-              <div className="rounded-2xl border border-border bg-surface p-5 shadow-ring">
+              <div className="rounded-2xl border border-border bg-surface p-4 shadow-ring">
                 <div className="mb-3 flex items-center justify-between">
                   <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Related</div>
                   <Link to="/markets" className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
@@ -699,7 +851,7 @@ export default function MarketDetail() {
               </div>
 
               {/* Related markets */}
-              <div className="rounded-2xl border border-border bg-surface p-5 shadow-ring">
+              <div className="rounded-2xl border border-border bg-surface p-4 shadow-ring">
                 <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Related markets</div>
                 <div className="space-y-2">
                   {(relatedData?.markets ?? []).filter((m) => m.id !== market.id).slice(0, 3).map((m) => (
@@ -1199,7 +1351,14 @@ function ActionIcon({ icon: Icon, label, active, onClick }: {
   label: string; active?: boolean; onClick?: () => void;
 }) {
   return (
-    <button onClick={onClick} title={label} className={cn("inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground transition hover:text-foreground hover:bg-surface-hover", active && "text-foreground")}>
+    <button
+      onClick={onClick}
+      title={label}
+      className={cn(
+        "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:text-foreground hover:bg-background/70",
+        active && "text-foreground",
+      )}
+    >
       <Icon className={cn("h-3.5 w-3.5", active && "fill-current")} />
     </button>
   );

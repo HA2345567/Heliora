@@ -33,6 +33,7 @@ import oracleRouter from './routes/oracle';
 import portfolioRouter from './routes/portfolio';
 import socialRouter from './routes/social';
 import liveRouter from './routes/live';
+import faucetRouter from './routes/faucet';
 import { initializeWebSocket } from './routes/ws';
 import { AgentRunner } from './utils/agent-runner';
 import { syncKalshiMarkets, seedFallbackMarkets } from './utils/market-data-service';
@@ -51,6 +52,7 @@ app.use('/api/oracle', oracleRouter);
 app.use('/api/portfolio', portfolioRouter);
 app.use('/api/social', socialRouter);
 app.use('/api/live', liveRouter);
+app.use('/api/faucet', faucetRouter);
 
 // Initialize WebSocket
 initializeWebSocket(wss);

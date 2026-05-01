@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { prisma } from '../index';
 import { newId } from '../utils/helpers';
+import { solanaService } from '../utils/solana-service';
 
 const router = express.Router();
 
@@ -41,6 +42,24 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const price = side === 'YES' ? market.yesPrice : market.noPrice;
     const cost = parseFloat((body.shares * price).toFixed(2));
     const fee = parseFloat((cost * 0.01).toFixed(4));
+
+    // Verify on-chain transaction if txSig provided and not a demo wallet
+    if (!xWallet.startsWith('demo_')) {
+      if (!body.txSig) {
+        res.status(400).json({ error: 'txSig is required for real trades' });
+        return;
+      }
+      try {
+        const isValid = await solanaService.verifyTransaction(body.txSig);
+        if (!isValid) {
+          res.status(400).json({ error: 'Transaction verification failed on Solana' });
+          return;
+        }
+      } catch (err: any) {
+        res.status(400).json({ error: `Transaction verification error: ${err.message}` });
+        return;
+      }
+    }
 
     // Create trade record
     const trade = await prisma.trade.create({

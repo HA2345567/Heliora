@@ -10,7 +10,6 @@ const NAV = [
   { to: "/live", label: "Live" },
   { to: "/agents", label: "Agents" },
   { to: "/oracle", label: "Oracle" },
-  { to: "/leaderboard", label: "Leaderboard" },
   { to: "/portfolio", label: "Portfolio" },
   { to: "/developers", label: "Developers" },
 ];
@@ -68,9 +67,10 @@ export function Header() {
           <ConnectWalletButton className="heliora-wallet" />
           <Link
             to="/markets/create"
-            className="rounded-md bg-foreground px-3.5 py-1.5 text-sm font-semibold text-background transition hover:opacity-90 shadow-button-inset"
+            className="group relative overflow-hidden rounded-md bg-foreground px-4 py-1.5 text-sm font-semibold text-background transition-all hover:opacity-90 hover:shadow-[0_0_20px_-5px_rgba(255,255,255,0.4)]"
           >
-            Launch App
+            <span className="relative z-10">Launch App</span>
+            <div className="absolute inset-0 z-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
           </Link>
         </div>
 

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
 import { MarketCard } from "@/components/MarketCard";
+import SoftAurora from "@/components/SoftAurora";
 import { api, formatUsd } from "@/lib/api";
 import {
   ArrowRight,
@@ -52,9 +53,27 @@ export default function Landing() {
   return (
     <PageShell>
       <section className="relative overflow-hidden border-b border-border/60">
-        <div className="absolute inset-0 grid-bg radial-fade opacity-60" />
-        <div className="absolute left-1/2 top-0 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-foreground/[0.04] blur-3xl" />
-        <div className="container relative pb-28 pt-20 md:pb-36 md:pt-28">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[460px] opacity-90 [mask-image:linear-gradient(to_bottom,black_0%,black_72%,transparent_100%)] md:h-[520px]">
+          <SoftAurora
+            speed={0.6}
+            scale={1.5}
+            brightness={1.2}
+            color1="#14F195"
+            color2="#9945FF"
+            noiseFrequency={2.5}
+            noiseAmplitude={1}
+            bandHeight={0.5}
+            bandSpread={1}
+            octaveDecay={0.1}
+            layerOffset={0}
+            colorSpeed={1}
+            enableMouseInteraction={false}
+            mouseInfluence={0.25}
+          />
+        </div>
+        <div className="absolute inset-0 z-[1] grid-bg radial-fade opacity-35" />
+        <div className="absolute left-1/2 top-0 z-[1] h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-foreground/[0.04] blur-3xl" />
+        <div className="container relative z-10 pb-28 pt-20 md:pb-36 md:pt-28">
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center animate-fade-up">
             {/* <div className="badge-pill">
               <Sparkles className="h-3 w-3" />
@@ -75,10 +94,10 @@ export default function Landing() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 to="/markets"
-                className="group inline-flex items-center justify-center gap-2 rounded-md bg-foreground px-5 py-3 text-sm font-semibold text-background shadow-button-inset transition hover:opacity-90"
+                className="group relative flex items-center justify-center gap-2 rounded-lg bg-foreground px-8 py-3.5 text-sm font-semibold text-background shadow-[0_0_30px_-10px_rgba(255,255,255,0.3)] transition-all hover:scale-[1.02] hover:opacity-90 active:scale-[0.98]"
               >
                 Explore markets
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
                 to="/markets/create"

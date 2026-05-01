@@ -16,6 +16,7 @@
 import { prisma } from '../index';
 import { newId, generatePriceHistory } from './helpers';
 import { callGemini, geminiAvailable } from './gemini';
+import { solanaService } from './solana-service';
 
 // ─────────────────────────────────────────────────────────
 // Agent 1: Market Creator Agent
@@ -132,6 +133,9 @@ Respond ONLY with JSON: { "mirror": true|false, "odds": <float 0.01-0.99>, "reas
         noPrice: parseFloat(Math.max(0.01, Math.min(0.99, 1 - p)).toFixed(4)),
       })),
     });
+
+    // Deploy to Solana
+    await solanaService.createMarketOnChain({ id: marketId, endsAt });
 
     console.log(`[CreatorAgent] ✅ Created market: "${question.slice(0, 60)}"`);
   }
@@ -352,6 +356,11 @@ export async function runResolutionAgent(): Promise<void> {
         resolvedAt: new Date(),
       },
     });
+
+    // Resolve on Solana
+    if (!isDisputed) {
+      await solanaService.resolveMarketOnChain(market.id, winner);
+    }
 
     console.log(`[ResolutionAgent] ✅ Resolved "${market.question.slice(0, 50)}" → ${isDisputed ? 'DISPUTED' : winner}`);
   }
