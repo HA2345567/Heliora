@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { useHelioraWallet } from "@/components/wallet/useHelioraWallet";
 import { PageShell } from "@/components/layout/PageShell";
-import { api, apiBaseUrl, formatUsd, timeUntil } from "@/lib/api";
+import { api, formatUsd, timeUntil } from "@/lib/api";
+import { useMarketSocket } from "@/hooks/useMarketSocket";
 import type { ApiMarket, ApiPricePoint, ApiTrade } from "@/lib/api-types";
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
@@ -40,6 +41,7 @@ import {
   Eye,
   Flame,
   LineChart as LineChartIcon,
+  Loader2,
   MoreHorizontal,
   Share2,
   ShieldCheck,
@@ -115,6 +117,10 @@ export default function MarketDetail() {
     queryFn: () => api.listMarkets({ sort: "volume", take: 6 }),
   });
 
+  const { balance, isLoadingBalance } = useHelioraWallet();
+
+  const { livePrice: socketPrice, orderbook: socketOrderbook, status: wsStatus } = useMarketSocket(id);
+  
   const market = data?.market;
   const pricePoints = market?.pricePoints ?? [];
 
@@ -150,8 +156,9 @@ export default function MarketDetail() {
   const { publicKey, sendTransaction, signTransaction } = useWallet();
 
   const [isBuying, setIsBuying] = useState(false);
+  const [isSell, setIsSell] = useState(false);
 
-  const handleBuy = async () => {
+  const handleTrade = async () => {
     if (!publicKey || !signTransaction) {
       toast.error("Please connect your wallet first");
       return;
@@ -240,10 +247,11 @@ export default function MarketDetail() {
         side: side,
         kind: orderType === "Market" ? "market" : "limit",
         shares: shares,
+        isSell: isSell,
         txSig: signature
       });
 
-      toast.success(`Successfully bought $${amount} of ${side}!`, { id: "trade" });
+      toast.success(`Successfully ${isSell ? 'sold' : 'bought'} $${amount} of ${side}!`, { id: "trade" });
       queryClient.invalidateQueries({ queryKey: ["market", id] });
       queryClient.invalidateQueries({ queryKey: ["portfolio"] });
     } catch (err: any) {
@@ -251,6 +259,92 @@ export default function MarketDetail() {
       toast.error(`Trade failed: ${err.message || "Unknown error"}`, { id: "trade" });
     } finally {
       setIsBuying(false);
+    }
+  };
+
+  const [isClaiming, setIsClaiming] = useState(false);
+
+  const handleClaim = async () => {
+    if (!publicKey || !signTransaction) {
+      toast.error("Please connect your wallet first");
+      return;
+    }
+
+    try {
+      setIsClaiming(true);
+      toast.loading("Preparing claim...", { id: "claim" });
+
+      const programId = new PublicKey("By5KbxUEFGs7NrQYLXcjmptft6yX2saVWvoA8sx7HzqT");
+      const provider = new anchor.AnchorProvider(
+        connection,
+        {
+          publicKey: publicKey,
+          signTransaction: signTransaction as any,
+          signAllTransactions: async (txs) => txs,
+        },
+        { preflightCommitment: "confirmed" }
+      );
+      const program = new anchor.Program(IDL, provider);
+
+      const idStr = id || "";
+      const cleanId = idStr.replace(/-/g, '');
+      let marketIdNum = 0;
+      if (cleanId.length >= 8) marketIdNum = parseInt(cleanId.slice(0, 8), 16);
+      else {
+        for (let i = 0; i < idStr.length; i++) {
+          marketIdNum = ((marketIdNum << 5) - marketIdNum) + idStr.charCodeAt(i);
+          marketIdNum |= 0;
+        }
+        marketIdNum = Math.abs(marketIdNum);
+      }
+
+      const marketIdBytes = new Uint8Array(4);
+      const view = new DataView(marketIdBytes.buffer);
+      view.setUint32(0, marketIdNum, true);
+
+      const encoder = new TextEncoder();
+      const [marketPda] = PublicKey.findProgramAddressSync([encoder.encode('market'), marketIdBytes], programId);
+      const [vaultPda] = PublicKey.findProgramAddressSync([encoder.encode('vault'), marketIdBytes], programId);
+      const [outcomeAMintPda] = PublicKey.findProgramAddressSync([encoder.encode('outcome_a'), marketIdBytes], programId);
+      const [outcomeBMintPda] = PublicKey.findProgramAddressSync([encoder.encode('outcome_b'), marketIdBytes], programId);
+
+      const collateralMint = new PublicKey("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr");
+      const userCollateral = getAssociatedTokenAddressSync(collateralMint, publicKey);
+      const userOutcomeA = getAssociatedTokenAddressSync(outcomeAMintPda, publicKey);
+      const userOutcomeB = getAssociatedTokenAddressSync(outcomeBMintPda, publicKey);
+
+      const tx = await program.methods
+        .claimRewards(marketIdNum)
+        .accounts({
+          market: marketPda,
+          user: publicKey,
+          userCollateral: userCollateral,
+          collateralVault: vaultPda,
+          outcomeAMint: outcomeAMintPda,
+          outcomeBMint: outcomeBMintPda,
+          userOutcomeA: userOutcomeA,
+          userOutcomeB: userOutcomeB,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .transaction();
+
+      toast.loading("Awaiting approval...", { id: "claim" });
+      const signature = await sendTransaction(tx, connection);
+      
+      toast.loading("Finalizing redemption...", { id: "claim" });
+      await connection.confirmTransaction(signature, "confirmed");
+
+      // Notify backend
+      await api.redeemMarket(id!, signature);
+
+      toast.success("Winnings claimed successfully!", { id: "claim" });
+      queryClient.invalidateQueries({ queryKey: ["market", id] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Claim failed: ${err.message || "Unknown error"}`, { id: "claim" });
+    } finally {
+      setIsClaiming(false);
     }
   };
 
@@ -276,7 +370,7 @@ export default function MarketDetail() {
   // ─── Live price (WebSocket + polling fallback)
   const [livePrice, setLivePrice] = useState(seedYes);
   const [tickDir, setTickDir] = useState<"up" | "down" | "flat">("flat");
-  const [wsConnected, setWsConnected] = useState(false);
+  const wsConnected = wsStatus === "open";
   const prevPriceRef = useRef(seedYes);
   const [wsOrderbook, setWsOrderbook] = useState<{ yes: OBRow[]; no: OBRow[] } | null>(null);
 
@@ -291,52 +385,35 @@ export default function MarketDetail() {
     }
   }, [market?.yesPrice]);
 
-  // WebSocket for live updates
+  // WebSocket sync from hook
   useEffect(() => {
-    if (!market?.id || !apiBaseUrl) return;
-    const wsBase = apiBaseUrl.replace(/^https/, "wss").replace(/^http/, "ws");
-    const wsUrl = `${wsBase}/api/ws/${market.id}`;
-    let ws: WebSocket | null = null;
-    let closed = false;
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onopen = () => { if (!closed) setWsConnected(true); };
-      ws.onmessage = (e) => {
-        if (closed) return;
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === "price") {
-            setLivePrice((prev) => {
-              setTickDir(msg.yesPrice > prev ? "up" : msg.yesPrice < prev ? "down" : "flat");
-              prevPriceRef.current = prev;
-              return msg.yesPrice;
-            });
-            if (msg.orderbook) {
-              const ob = msg.orderbook;
-              const toRows = (items: { price: number; size: number }[]): OBRow[] => {
-                let acc = 0;
-                return items.map((r) => { acc += r.size; return { price: r.price, size: r.size, total: acc }; });
-              };
-              setWsOrderbook({
-                yes: toRows(ob.buyYes ?? []),
-                no: toRows((ob.sellYes ?? []).map((r: { price: number; size: number }) => ({
-                  price: +(1 - r.price).toFixed(4), size: r.size,
-                }))),
-              });
-            }
-          }
-        } catch {}
-      };
-      ws.onclose = () => { if (!closed) setWsConnected(false); };
-      ws.onerror = () => { if (!closed) setWsConnected(false); };
-    } catch {
-      setWsConnected(false);
+    if (socketPrice !== null) {
+      setLivePrice((prev) => {
+        setTickDir(socketPrice > prev ? "up" : socketPrice < prev ? "down" : "flat");
+        prevPriceRef.current = prev;
+        return socketPrice;
+      });
     }
-    return () => {
-      closed = true;
-      ws?.close();
-    };
-  }, [market?.id]);
+  }, [socketPrice]);
+
+  useEffect(() => {
+    if (socketOrderbook) {
+      const toRows = (items: { price: number; size: number }[]): OBRow[] => {
+        let acc = 0;
+        return items.map((r) => {
+          acc += r.size;
+          return { price: r.price, size: r.size, total: acc };
+        });
+      };
+      setWsOrderbook({
+        yes: toRows(socketOrderbook.buyYes ?? []),
+        no: toRows((socketOrderbook.sellYes ?? []).map((r) => ({
+          price: +(1 - r.price).toFixed(4),
+          size: r.size,
+        }))),
+      });
+    }
+  }, [socketOrderbook]);
 
   // Polling fallback when WS is not connected
   useEffect(() => {
@@ -660,11 +737,11 @@ export default function MarketDetail() {
                 <div className="p-5">
                   {tab === "orderbook" && (
                     <div className="grid gap-5 lg:grid-cols-2">
-                      <DepthBook side="YES" rows={orderbook.yes} mid={livePrice} />
-                      <DepthBook side="NO" rows={orderbook.no} mid={1 - livePrice} />
+                      <DepthBook side="YES" rows={wsOrderbook?.buyYes ?? orderbook.yes} mid={livePrice} />
+                      <DepthBook side="NO" rows={wsOrderbook?.sellYes ?? orderbook.no} mid={1 - livePrice} />
                     </div>
                   )}
-                  {tab === "activity" && <ActivityFeed rows={activity} />}
+                  {tab === "activity" && <ActivityFeed trades={data?.recentTrades ?? []} />}
                   {tab === "holders" && <HoldersList rows={holders} />}
                   {tab === "agents" && <AgentsPanel marketId={market.id} yesPrice={livePrice} />}
                   {tab === "rules" && <ResolutionRules market={market} />}
@@ -679,10 +756,23 @@ export default function MarketDetail() {
             <aside className="space-y-5 lg:sticky lg:top-20 lg:self-start">
               {/* Order ticket */}
               <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-ring-strong">
-                <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-                  <div className="font-display text-base">Place order</div>
-                  <span className="badge-pill">
-                    <Zap className="h-3 w-3 text-warning" /> Sub-second
+                <div className="flex items-center justify-between border-b border-border px-4 py-1.5 bg-background/40">
+                  <div className="flex gap-1 p-0.5">
+                    <button 
+                      onClick={() => setIsSell(false)}
+                      className={cn("px-3 py-1 text-[11px] font-bold uppercase rounded-md transition", !isSell ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}
+                    >
+                      Buy
+                    </button>
+                    <button 
+                      onClick={() => setIsSell(true)}
+                      className={cn("px-3 py-1 text-[11px] font-bold uppercase rounded-md transition", isSell ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}
+                    >
+                      Sell
+                    </button>
+                  </div>
+                  <span className={cn("badge-pill", wsStatus === 'open' ? "text-success" : "text-warning")}>
+                    <Zap className={cn("h-3 w-3", wsStatus === 'open' ? "animate-pulse" : "")} /> {wsStatus === 'open' ? "Live" : "Sub-second"}
                   </span>
                 </div>
 
@@ -791,19 +881,29 @@ export default function MarketDetail() {
                   </div>
 
                   {/* CTA */}
-                  <button
-                    onClick={handleBuy}
-                    disabled={isBuying}
-                    className={cn(
-                      "group relative w-full overflow-hidden rounded-xl py-3 text-sm font-semibold shadow-button-inset transition-all active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none",
-                      side === "YES" ? "bg-success text-background hover:brightness-110" : "bg-destructive text-background hover:brightness-110",
-                    )}
-                  >
-                    <span className="relative z-10">
-                      {isBuying ? "Executing..." : `Buy ${side} · $${amount.toFixed(0)} → ${potential.toFixed(2)}`}
-                    </span>
-                    {!isBuying && <span className="absolute inset-0 -translate-x-full bg-white/10 transition-transform duration-700 group-hover:translate-x-0" />}
-                  </button>
+                  {market.status === 'resolved' ? (
+                    <button
+                      onClick={handleClaim}
+                      disabled={isClaiming}
+                      className="group relative w-full overflow-hidden rounded-xl bg-foreground py-3 text-sm font-semibold text-background shadow-button-inset transition-all active:scale-[0.99] disabled:opacity-50"
+                    >
+                      {isClaiming ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Claim Winnings"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleTrade}
+                      disabled={isBuying}
+                      className={cn(
+                        "group relative w-full overflow-hidden rounded-xl py-3 text-sm font-semibold shadow-button-inset transition-all active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none",
+                        isSell ? "bg-foreground text-background" : (side === "YES" ? "bg-success text-background hover:brightness-110" : "bg-destructive text-background hover:brightness-110"),
+                      )}
+                    >
+                      <span className="relative z-10">
+                        {isBuying ? "Executing..." : isSell ? `Sell ${side} · ${shares.toFixed(0)} shares` : `Buy ${side} · $${amount.toFixed(0)} → ${potential.toFixed(2)}`}
+                      </span>
+                      {!isBuying && <span className="absolute inset-0 -translate-x-full bg-white/10 transition-transform duration-700 group-hover:translate-x-0" />}
+                    </button>
+                  )}
 
                   <button className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-background py-2 text-[11px] font-medium text-muted-foreground transition hover:text-foreground">
                     <Sparkles className="h-3.5 w-3.5" />
@@ -1425,26 +1525,37 @@ function generateActivity(yesPrice: number): ActivityRow[] {
   });
 }
 
-function ActivityFeed({ rows }: { rows: ActivityRow[] }) {
+function ActivityFeed({ trades }: { trades: ApiTrade[] }) {
+  if (!trades.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <Users className="h-8 w-8 text-muted-foreground/30" />
+        <p className="mt-2 text-sm text-muted-foreground">No trades yet. Be the first!</p>
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-hidden rounded-lg border border-border">
       <div className="grid grid-cols-[1fr_90px_100px_90px_70px] gap-2 border-b border-border bg-background px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
         <span>Trader</span><span>Side</span><span className="text-right">Shares</span><span className="text-right">Price</span><span className="text-right">Time</span>
       </div>
       <div className="divide-y divide-border">
-        {rows.map((r) => (
-          <div key={r.id} className="grid grid-cols-[1fr_90px_100px_90px_70px] items-center gap-2 px-4 py-2.5 text-xs transition hover:bg-surface-hover/50">
+        {trades.map((t) => (
+          <div key={t.id} className="grid grid-cols-[1fr_90px_100px_90px_70px] items-center gap-2 px-4 py-2.5 text-xs transition hover:bg-surface-hover/50">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", r.isAgent ? "bg-sol-purple" : "bg-foreground/60")} />
-              <span className="truncate font-mono text-foreground/90">{r.who}</span>
-              {r.isAgent && <span className="shrink-0 rounded border border-border px-1 py-0 font-mono text-[9px] uppercase text-muted-foreground">AI</span>}
+              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", t.isAgent ? "bg-sol-purple" : "bg-foreground/60")} />
+              <span className="truncate font-mono text-foreground/90">
+                {t.handle || (t.wallet ? `${t.wallet.slice(0, 4)}...${t.wallet.slice(-4)}` : "anon")}
+              </span>
+              {t.isAgent && <span className="shrink-0 rounded border border-border px-1 py-0 font-mono text-[9px] uppercase text-muted-foreground">AI</span>}
             </div>
-            <span className={cn("rounded px-1.5 py-0.5 text-center font-mono text-[10px] font-semibold", r.side === "YES" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
-              {r.isBuy ? "BUY" : "SELL"} {r.side}
+            <span className={cn("rounded px-1.5 py-0.5 text-center font-mono text-[10px] font-semibold uppercase", t.side === "YES" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
+              {t.kind === 'market' ? 'BUY' : t.kind.toUpperCase()} {t.side}
             </span>
-            <span className="text-right font-mono tabular-nums text-foreground/90">{r.amount.toLocaleString()}</span>
-            <span className="text-right font-mono tabular-nums">{r.price.toFixed(3)}</span>
-            <span className="text-right font-mono text-muted-foreground">{r.time}</span>
+            <span className="text-right font-mono tabular-nums text-foreground/90">{Math.round(t.shares).toLocaleString()}</span>
+            <span className="text-right font-mono tabular-nums">{t.price.toFixed(3)}</span>
+            <span className="text-right font-mono text-muted-foreground">{timeUntil(t.createdAt, true)}</span>
           </div>
         ))}
       </div>
@@ -1496,14 +1607,46 @@ function HoldersList({ rows }: { rows: ReturnType<typeof generateHolders> }) {
 }
 
 function ResolutionRules({ market }: { market: ApiMarket }) {
+  const res = market.oracleResolution;
+
   return (
-    <div className="space-y-5">
-      <p className="text-sm leading-relaxed text-foreground/90">
-        This market resolves <strong className="text-foreground">YES</strong> if the criteria as described in the question are
-        satisfied. Resolution source: <span className="font-mono text-foreground">{market.resolution}</span>.
-        {market.description && ` ${market.description}`}
-        {" "}Disputes may be opened within 48 hours by staking PREDICT tokens.
-      </p>
+    <div className="space-y-6">
+      {res ? (
+        <div className="rounded-xl border border-border bg-background p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-success" />
+              <h4 className="font-display text-base">Oracle Resolution Details</h4>
+            </div>
+            <span className="badge-pill bg-success/10 text-success uppercase">
+              {res.outcome} confirmed
+            </span>
+          </div>
+          <div className="mt-4 space-y-4">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {res.reasoning}
+            </p>
+            <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+              <div>
+                <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Consensus</div>
+                <div className="mt-1 font-mono text-sm">{res.consensus} of {res.totalVotes} Agents</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Confidence</div>
+                <div className="mt-1 font-mono text-sm">{(res.averageConfidence ?? 0).toFixed(1)}% avg</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm leading-relaxed text-foreground/90">
+          This market resolves <strong className="text-foreground">YES</strong> if the criteria as described in the question are
+          satisfied. Resolution source: <span className="font-mono text-foreground">{market.resolution}</span>.
+          {market.description && ` ${market.description}`}
+          {" "}Disputes may be opened within 48 hours by staking PREDICT tokens.
+        </p>
+      )}
+      
       <div className="grid gap-3 md:grid-cols-3">
         {[
           { icon: ShieldCheck, t: "Trustless", d: "On-chain oracle attests outcome cryptographically." },

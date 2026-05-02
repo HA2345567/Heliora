@@ -29,6 +29,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
             market: true,
           },
         },
+        subscriptions: {
+          include: {
+            agent: true,
+          },
+        },
       },
     });
 
@@ -79,12 +84,22 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       recentTrades: user.trades.map(t => ({
         id: t.id,
         marketId: t.marketId,
-        marketQuestion: t.market.question,
+        question: t.market.question,
         side: t.side,
         shares: t.shares,
         price: t.price,
-        cost: t.cost,
+        isSell: t.isSell,
         createdAt: t.createdAt,
+      })),
+      subscriptions: (user.subscriptions || []).map(s => ({
+        id: s.id,
+        agentId: s.agentId,
+        agentName: s.agent.name,
+        agentHandle: s.agent.handle,
+        agentType: s.agent.type,
+        capital: s.capital,
+        pnl: s.capital * (s.agent.pnl30d / 100) * 0.4, // illustrative ROI
+        createdAt: s.createdAt,
       })),
     });
     return;

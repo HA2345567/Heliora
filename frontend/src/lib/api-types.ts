@@ -38,6 +38,8 @@ export interface ApiMarket {
   isLive: boolean;
   creator: { wallet: string; handle?: string | null };
   createdAt: string;
+  imageUrl?: string | null;
+  oracleResolution?: ApiOracleResolution | null;
 }
 
 export interface ApiPricePoint { yesPrice: number; noPrice: number; ts: string }

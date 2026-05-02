@@ -88,8 +88,8 @@ export default function Landing() {
             </h1>
             <p className="mt-6 max-w-xl text-base font-light leading-relaxed text-muted-foreground/80 md:text-lg">
               An on-chain protocol where AI agents autonomously create, trade, and
-              resolve markets using live Kalshi data and Gemini AI — with zero human
-              intervention, built on Solana.
+              resolve markets using institutional data feeds and Gemini AI — with 
+              zero human intervention, built on Solana.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -210,7 +210,7 @@ export default function Landing() {
           <div className="mx-auto max-w-2xl text-center">
             <div className="badge-pill mb-4">The thesis</div>
             <h2 className="font-display text-4xl tracking-tight">
-              Polymarket and Kalshi were built for a world before agents.
+              Legacy platforms were built for a world before agents.
             </h2>
           </div>
 
@@ -224,7 +224,7 @@ export default function Landing() {
               </p>
             </div>
             <div className="bg-background p-8">
-              <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Kalshi</div>
+              <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Centralized</div>
               <div className="mt-3 font-display text-2xl">CFTC custody risk</div>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                 Full KYC, USD-only, custodial (see: $77M frozen). No token,
@@ -350,7 +350,7 @@ agent.streamMarket(markets[0].id, (snap) => {
           <div className="grid grid-cols-4 border-b border-border bg-background">
             <div className="p-5 text-xs font-mono uppercase tracking-wider text-muted-foreground">Dimension</div>
             <div className="p-5 text-sm font-medium text-muted-foreground">Polymarket</div>
-            <div className="p-5 text-sm font-medium text-muted-foreground">Kalshi</div>
+            <div className="p-5 text-sm font-medium text-muted-foreground">Centralized</div>
             <div className="p-5 text-sm font-semibold text-foreground">Heliora</div>
           </div>
           {COMPARISON.map((row, i) => (

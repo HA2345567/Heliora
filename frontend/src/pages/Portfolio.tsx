@@ -5,6 +5,7 @@ import { api, formatUsd, timeUntil } from "@/lib/api";
 import { Link } from "react-router-dom";
 import { ArrowDownRight, ArrowUpRight, Coins, ExternalLink, Sparkles, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RedeemButton } from "@/components/RedeemButton";
 
 export default function Portfolio() {
   const { connected, address: walletAddr, displayAddress } = useHelioraWallet();
@@ -29,7 +30,15 @@ export default function Portfolio() {
   }
 
   const positions = data?.positions ?? [];
-  const summary = data?.summary;
+  const subscriptions = data?.subscriptions ?? [];
+  
+  const openPositions = positions.filter((p: any) => p.market.status === 'open');
+  const resolvedPositions = positions.filter((p: any) => p.market.status === 'resolved');
+
+  const openValue = openPositions.reduce((s: number, p: any) => s + p.currentValue, 0);
+  const unrealized = data?.unrealizedPnl ?? 0;
+  const realized = data?.realizedPnl ?? 0;
+  const totalAllocated = subscriptions.reduce((s: number, sub: any) => s + sub.capital, 0);
 
   return (
     <PageShell>
@@ -55,16 +64,19 @@ export default function Portfolio() {
           </div>
 
           <div className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-4">
-            <BigStat label="Open value" value={summary ? `$${summary.openValue.toFixed(2)}` : "—"} sub={`${summary?.positions ?? 0} open`} />
-            <BigStat label="Unrealized P&L" value={summary ? `${summary.unrealized >= 0 ? "+" : ""}$${summary.unrealized.toFixed(2)}` : "—"} sub={summary && summary.openValue ? `${((summary.unrealized / summary.openValue) * 100).toFixed(2)}%` : ""} accent={summary && summary.unrealized >= 0 ? "success" : "destructive"} />
-            <BigStat label="Realized P&L" value={summary ? `${summary.realized >= 0 ? "+" : ""}$${summary.realized.toFixed(2)}` : "—"} sub="lifetime" />
-            <BigStat label="Idle yield" value="$0.00" sub="via Kamino · pending" />
+            <BigStat label="Open value" value={formatUsd(openValue)} sub={`${openPositions.length} positions`} />
+            <BigStat label="Unrealized P&L" value={`${unrealized >= 0 ? "+" : ""}${formatUsd(unrealized)}`} sub={openValue ? `${((unrealized / openValue) * 100).toFixed(2)}%` : "0%"} accent={unrealized >= 0 ? "success" : "destructive"} />
+            <BigStat label="Agent Staking" value={formatUsd(totalAllocated)} sub={`${subscriptions.length} active agents`} />
+            <BigStat label="Realized P&L" value={`${realized >= 0 ? "+" : ""}${formatUsd(realized)}`} sub="lifetime" />
           </div>
         </div>
       </section>
 
       <section className="container py-10">
-        <h2 className="font-display text-2xl">Open positions</h2>
+        <div className="flex items-end justify-between">
+          <h2 className="font-display text-2xl">Open positions</h2>
+          <span className="text-xs text-muted-foreground">{openPositions.length} active</span>
+        </div>
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface shadow-ring">
           <div className="grid grid-cols-12 border-b border-border bg-background px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -78,12 +90,12 @@ export default function Portfolio() {
             <div className="px-5 py-12 text-center text-sm text-muted-foreground">Loading…</div>
           ) : isError ? (
             <div className="px-5 py-12 text-center text-sm text-destructive">Failed to load portfolio</div>
-          ) : positions.length === 0 ? (
+          ) : openPositions.length === 0 ? (
             <div className="px-5 py-16 text-center text-sm text-muted-foreground">
-              No positions yet. <Link to="/markets" className="text-foreground underline">Browse markets →</Link>
+              No open positions. <Link to="/markets" className="text-foreground underline">Find a market →</Link>
             </div>
           ) : (
-            positions.map((p) => {
+            openPositions.map((p) => {
               const side: "YES" | "NO" = p.yesShares > p.noShares ? "YES" : "NO";
               const shares = side === "YES" ? p.yesShares : p.noShares;
               const avg = side === "YES" ? p.avgYesCost : p.avgNoCost;
@@ -122,6 +134,102 @@ export default function Portfolio() {
         </div>
       </section>
 
+      {resolvedPositions.length > 0 && (
+        <section className="container py-6">
+          <div className="flex items-end justify-between">
+            <h2 className="font-display text-2xl">Resolved markets</h2>
+            <span className="text-xs text-muted-foreground">Settled by AI Oracle</span>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface shadow-ring">
+            <div className="grid grid-cols-12 border-b border-border bg-background px-5 py-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="col-span-5">Market</div>
+              <div className="col-span-1">Side</div>
+              <div className="col-span-2 text-right">Result</div>
+              <div className="col-span-2 text-right">Outcome</div>
+              <div className="col-span-2 text-right">Action</div>
+            </div>
+            {resolvedPositions.map((p) => {
+              const side: "YES" | "NO" = p.yesShares > 0 ? "YES" : "NO";
+              const won = side === p.market.outcome;
+              const marketIdNum = parseInt(p.marketId.replace(/-/g, '').slice(0, 8), 16);
+              
+              return (
+                <div key={p.id} className="grid grid-cols-12 items-center border-t border-border/50 px-5 py-4">
+                  <div className="col-span-5">
+                    <div className="line-clamp-1 text-sm font-medium">{p.market.question}</div>
+                    <div className="mt-1 font-mono text-[11px] text-muted-foreground">{p.market.category}</div>
+                  </div>
+                  <div className="col-span-1">
+                    <span className={cn("rounded px-2 py-0.5 text-[11px] font-bold", side === "YES" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive")}>
+                      {side}
+                    </span>
+                  </div>
+                  <div className="col-span-2 text-right">
+                    <span className={cn("inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-bold uppercase", won ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive")}>
+                      {won ? "Won" : "Lost"}
+                    </span>
+                  </div>
+                  <div className="col-span-2 text-right font-mono text-sm">
+                    {p.market.outcome}
+                  </div>
+                  <div className="col-span-2 text-right">
+                    {won && (p.yesShares > 0 || p.noShares > 0) ? (
+                      <RedeemButton marketId={p.market.id} marketIdNum={marketIdNum} />
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">{won ? "Redeemed" : "Finalized"}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {subscriptions.length > 0 && (
+        <section className="container py-6">
+          <div className="flex items-end justify-between">
+            <h2 className="font-display text-2xl">Agent Staking</h2>
+            <Link to="/agents" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+              Browse more <Sparkles className="h-3 w-3" />
+            </Link>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {subscriptions.map((s: any) => (
+              <Link to={`/agents/${s.agentId}`} key={s.id} className="group rounded-2xl border border-border bg-surface p-5 shadow-ring transition hover:bg-surface-elevated">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
+                      <Bot className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <div className="font-display text-lg leading-tight">{s.agentName}</div>
+                      <div className="font-mono text-[10px] text-muted-foreground">{s.agentHandle}</div>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold text-success uppercase">Active</span>
+                </div>
+                
+                <div className="mt-6 grid grid-cols-2 gap-4 border-t border-border/50 pt-4">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Allocated</div>
+                    <div className="mt-1 font-mono text-base font-semibold">{formatUsd(s.capital)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Profit/Loss</div>
+                    <div className={cn("mt-1 font-mono text-base font-semibold", s.pnl >= 0 ? "text-success" : "text-destructive")}>
+                      {s.pnl >= 0 ? "+" : ""}{formatUsd(s.pnl)}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="container grid gap-6 pb-20 lg:grid-cols-[1fr_360px]">
         <div className="rounded-2xl border border-border bg-surface shadow-ring">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
@@ -129,15 +237,15 @@ export default function Portfolio() {
             <span className="text-xs text-muted-foreground">last 100 trades</span>
           </div>
           <div className="divide-y divide-border/50">
-            {(data?.trades ?? []).slice(0, 10).map((a) => (
+            {(data?.recentTrades ?? []).slice(0, 10).map((a: any) => (
               <div key={a.id} className="flex items-center justify-between px-5 py-4">
                 <div>
                   <div className="text-sm">
                     <span className="font-medium">{a.side === "YES" ? "Bought YES" : "Bought NO"}</span>{" "}
-                    <span className="text-muted-foreground">· {a.market.question}</span>
+                    <span className="text-muted-foreground">· {a.marketQuestion}</span>
                   </div>
                   <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-                    {new Date(a.createdAt).toLocaleString()} · ${a.cost.toFixed(2)} @ {a.price.toFixed(2)}
+                    {new Date(a.createdAt).toLocaleString()} · ${a.cost.toFixed(2)} @ {a.price.toFixed(3)}
                   </div>
                 </div>
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />

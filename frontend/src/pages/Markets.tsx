@@ -106,7 +106,7 @@ export default function Markets() {
         {query.isLoading ? (
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="h-[260px] animate-shimmer rounded-xl border border-border bg-surface" />
+              <div key={i} className="h-[380px] animate-shimmer rounded-2xl border border-border bg-surface" />
             ))}
           </div>
         ) : query.isError ? (

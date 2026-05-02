@@ -10,6 +10,7 @@ interface PlaceTradeBody {
   side: 'YES' | 'NO';
   shares: number;
   kind?: 'market' | 'limit';
+  isSell?: boolean;
   txSig?: string;
 }
 
@@ -121,38 +122,62 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     });
 
     if (existingPosition) {
-      if (side === 'YES') {
-        const newShares = existingPosition.yesShares + body.shares;
-        const avgCost = parseFloat(
-          (
-            (existingPosition.avgYesCost * existingPosition.yesShares + price * body.shares) /
-            newShares
-          ).toFixed(4)
-        );
-        await prisma.position.update({
-          where: { id: existingPosition.id },
-          data: {
-            yesShares: newShares,
-            avgYesCost: avgCost,
-          },
-        });
+      if (body.isSell) {
+        if (side === 'YES') {
+          const sharesToSell = Math.min(existingPosition.yesShares, body.shares);
+          const profit = sharesToSell * (price - existingPosition.avgYesCost);
+          await prisma.position.update({
+            where: { id: existingPosition.id },
+            data: {
+              yesShares: { decrement: sharesToSell },
+              realizedPnl: { increment: profit },
+            },
+          });
+        } else {
+          const sharesToSell = Math.min(existingPosition.noShares, body.shares);
+          const profit = sharesToSell * (price - existingPosition.avgNoCost);
+          await prisma.position.update({
+            where: { id: existingPosition.id },
+            data: {
+              noShares: { decrement: sharesToSell },
+              realizedPnl: { increment: profit },
+            },
+          });
+        }
       } else {
-        const newShares = existingPosition.noShares + body.shares;
-        const avgCost = parseFloat(
-          (
-            (existingPosition.avgNoCost * existingPosition.noShares + price * body.shares) /
-            newShares
-          ).toFixed(4)
-        );
-        await prisma.position.update({
-          where: { id: existingPosition.id },
-          data: {
-            noShares: newShares,
-            avgNoCost: avgCost,
-          },
-        });
+        if (side === 'YES') {
+          const newShares = existingPosition.yesShares + body.shares;
+          const avgCost = parseFloat(
+            (
+              (existingPosition.avgYesCost * existingPosition.yesShares + price * body.shares) /
+              newShares
+            ).toFixed(4)
+          );
+          await prisma.position.update({
+            where: { id: existingPosition.id },
+            data: {
+              yesShares: newShares,
+              avgYesCost: avgCost,
+            },
+          });
+        } else {
+          const newShares = existingPosition.noShares + body.shares;
+          const avgCost = parseFloat(
+            (
+              (existingPosition.avgNoCost * existingPosition.noShares + price * body.shares) /
+              newShares
+            ).toFixed(4)
+          );
+          await prisma.position.update({
+            where: { id: existingPosition.id },
+            data: {
+              noShares: newShares,
+              avgNoCost: avgCost,
+            },
+          });
+        }
       }
-    } else {
+    } else if (!body.isSell) {
       await prisma.position.create({
         data: {
           id: newId(),
@@ -172,6 +197,95 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     console.error(error);
     res.status(500).json({ error: 'Failed to place trade' });
     return;
+  }
+});
+
+// Redeem winnings for a settled market
+router.post('/redeem', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { marketId, txSig } = req.body;
+    const xWallet = (req.headers['x-wallet'] as string);
+
+    if (!xWallet) {
+      res.status(400).json({ error: 'Wallet address required' });
+      return;
+    }
+
+    const market = await prisma.market.findUnique({
+      where: { id: marketId },
+    });
+
+    if (!market || market.status !== 'resolved') {
+      res.status(400).json({ error: 'Market is not resolved yet' });
+      return;
+    }
+
+    const position = await prisma.position.findUnique({
+      where: {
+        marketId_userId: {
+          marketId,
+          userId: xWallet,
+        },
+      },
+    });
+
+    if (!position || (position.yesShares === 0 && position.noShares === 0)) {
+      res.status(400).json({ error: 'No shares to redeem' });
+      return;
+    }
+
+    // Verify on-chain transaction if provided
+    if (txSig && !xWallet.startsWith('demo_')) {
+      const isValid = await solanaService.verifyTransaction(txSig);
+      if (!isValid) {
+        res.status(400).json({ error: 'On-chain verification failed' });
+        return;
+      }
+    }
+
+    const winningSide = market.outcome; // YES or NO
+    let payout = 0;
+    let profit = 0;
+
+    if (winningSide === 'YES') {
+      payout = position.yesShares; // 1 share = 1 USDC
+      profit = payout - (position.yesShares * position.avgYesCost);
+    } else if (winningSide === 'NO') {
+      payout = position.noShares;
+      profit = payout - (position.noShares * position.avgNoCost);
+    }
+
+    // Update position
+    await prisma.position.update({
+      where: { id: position.id },
+      data: {
+        yesShares: 0,
+        noShares: 0,
+        realizedPnl: { increment: profit },
+      },
+    });
+
+    // Record redemption as a trade record for history
+    await prisma.trade.create({
+      data: {
+        id: newId(),
+        marketId,
+        userId: xWallet,
+        wallet: xWallet,
+        side: winningSide === 'YES' ? 'YES' : 'NO',
+        kind: 'redeem',
+        shares: winningSide === 'YES' ? position.yesShares : position.noShares,
+        price: 1.0,
+        cost: payout,
+        fee: 0,
+        txSig: txSig || `redeem_${newId().slice(0, 10)}`,
+      },
+    });
+
+    res.json({ success: true, payout, profit });
+  } catch (error) {
+    console.error('Redemption error:', error);
+    res.status(500).json({ error: 'Failed to redeem' });
   }
 });
 
@@ -241,7 +355,10 @@ router.get('/portfolio', async (req: Request, res: Response): Promise<void> => {
 
     const enrichedTrades = trades.map((t) => ({
       ...t,
-      market: { question: 'N/A', category: 'N/A' },
+      market: { 
+        question: t.market?.question || 'N/A', 
+        category: t.market?.category || 'N/A' 
+      },
     }));
 
     res.json({

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { PageShell } from "@/components/layout/PageShell";
-import { Activity, ArrowDown, ArrowRight, ArrowUp, Radio, Search, Zap } from "lucide-react";
+import { Activity, ArrowDown, ArrowRight, ArrowUp, Radio, Search, ShieldCheck, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KalshiMarketLive } from "@/lib/api-types";
 
@@ -27,10 +27,11 @@ function timeUntil(iso: string): string {
 export default function Live() {
   const [cat, setCat] = useState<(typeof CATS)[number]>("All");
   const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(100);
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch, isFetching } = useQuery({
-    queryKey: ["live", "markets"],
-    queryFn: () => api.liveMarkets({ status: "open", limit: 100 }),
+    queryKey: ["live", "markets", limit],
+    queryFn: () => api.liveMarkets({ status: "open", limit }),
     refetchInterval: 15_000,           // poll every 15s
     refetchIntervalInBackground: false,
   });
@@ -54,15 +55,16 @@ export default function Live() {
         <div className="absolute inset-0 grid-bg radial-fade opacity-40" />
         <div className="container relative py-16">
           <div className="badge-pill">
-            <Radio className="h-3 w-3 animate-pulse-soft" /> Live · Kalshi liquidity bridge
+            <Radio className="h-3 w-3 animate-pulse-soft" /> Live · Institutional liquidity bridge
           </div>
           <h1 className="mt-5 max-w-3xl font-display text-5xl leading-[1.05] tracking-tight text-gradient">
-            Real-time prediction markets, mirrored from Kalshi.
+            Real-time prediction markets, aggregated from institutional feeds.
           </h1>
           <p className="mt-5 max-w-2xl text-muted-foreground">
-            Heliora aggregates Kalshi's open markets alongside native Solana markets so
-            traders see one unified feed. Prices refresh every 15 seconds via our edge proxy —
-            arbitrage agents keep them aligned with on-chain liquidity.
+            Heliora aggregates markets from top-tier institutional providers alongside 
+            native Solana markets so traders see one unified feed. Prices refresh 
+            every 15 seconds via our edge proxy — arbitrage agents keep them 
+            aligned with on-chain liquidity.
           </p>
 
           <div className="mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-4">
@@ -129,9 +131,24 @@ export default function Live() {
             No markets match your filters.
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((m) => <KalshiCard key={m.ticker} m={m} />)}
-          </div>
+          <>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((m) => <KalshiCard key={m.ticker} m={m} />)}
+            </div>
+            
+            {data?.pagination?.hasMore && (
+              <div className="mt-12 flex justify-center">
+                <button
+                  onClick={() => setLimit(l => l + 100)}
+                  disabled={isFetching}
+                  className="group relative flex items-center gap-2 rounded-xl border border-border bg-surface px-8 py-4 text-sm font-semibold text-foreground shadow-ring transition hover:bg-surface-elevated active:scale-[0.98] disabled:opacity-50"
+                >
+                  {isFetching ? "Syncing..." : "Load more markets"}
+                  <ArrowDown className="h-4 w-4 transition-transform group-hover:translate-y-0.5" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </PageShell>
@@ -160,7 +177,7 @@ function KalshiCard({ m }: { m: KalshiMarketLive }) {
           {m.category}
         </span>
         <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase text-success">
-          <Zap className="h-2.5 w-2.5" /> Kalshi
+          <ShieldCheck className="h-2.5 w-2.5" /> Verified
         </span>
       </div>
 

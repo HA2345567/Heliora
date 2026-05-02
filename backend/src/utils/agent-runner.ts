@@ -75,6 +75,9 @@ export async function runMarketCreatorAgent(): Promise<void> {
     let shouldMirror = true;
     let odds = yesPrice;
 
+    // RULE: If the market has high volume (>10k), we strongly prefer mirroring it
+    const isHighVolume = (km.volume ?? 0) > 10000;
+
     if (geminiAvailable()) {
       try {
         const prompt = `You are a prediction market analyst AI agent on Solana.
@@ -84,16 +87,19 @@ Market to evaluate:
 - Current YES probability: ${(yesPrice * 100).toFixed(0)}%
 - Closes: ${endsAt.toDateString()}
 - Category: ${km.category ?? 'Unknown'}
+- Volume: $${(km.volume ?? 0).toLocaleString()}
 
 Decide if this market should be mirrored on-chain. Consider: clarity, verifiability, and public interest.
+${isHighVolume ? 'Note: This market has high trading volume, so we should try to include it unless it is clearly broken.' : ''}
 Respond ONLY with JSON: { "mirror": true|false, "odds": <float 0.01-0.99>, "reason": "<one sentence>" }`;
 
-        const r = await callGemini(prompt); // throttled — 1s min interval, auto-retries 429s
+        const r = await callGemini(prompt); // throttled
         const parsed = r.json<{ mirror: boolean; odds: number; reason: string }>();
         if (parsed) {
-          shouldMirror = parsed.mirror;
+          // If high volume, we might override a "false" mirror if the reason is just "ambiguity"
+          shouldMirror = parsed.mirror || (isHighVolume && !parsed.reason.toLowerCase().includes('broken'));
           odds = Math.max(0.02, Math.min(0.98, parsed.odds || yesPrice));
-          console.log(`[CreatorAgent] Gemini: mirror=${parsed.mirror} — ${parsed.reason}`);
+          console.log(`[CreatorAgent] Gemini: mirror=${shouldMirror} (Gemini said ${parsed.mirror}) — ${parsed.reason}`);
         }
       } catch (e) {
         console.warn('[CreatorAgent] Gemini call failed:', (e as Error).message);
@@ -444,6 +450,83 @@ export async function runTradingAgents(): Promise<void> {
       },
     });
 
+    // --- COPY-TRADING LOGIC ---
+    // Fetch all active subscribers for this agent
+    const subscriptions = await prisma.subscription.findMany({
+      where: { agentId: agent.id },
+    });
+
+    for (const sub of subscriptions) {
+      // Ensure the subscriber user exists in our User table
+      // In our system, sub.userId stores the wallet address from the frontend
+      const subscriber = await prisma.user.findUnique({ where: { wallet: sub.userId } })
+        ?? await prisma.user.create({ data: { id: newId(), wallet: sub.userId, handle: `user_${sub.userId.slice(0, 5)}` } });
+
+      // Calculate share size based on user capital vs agent AUM
+      const userTradeShares = Math.max(1, Math.floor((sub.capital / tradePrice) * 0.05));
+      const userCost = userTradeShares * tradePrice;
+      const userFee = userCost * 0.01;
+
+      // Create trade for subscriber
+      await prisma.trade.create({
+        data: {
+          id: newId(),
+          marketId: market.id,
+          userId: subscriber.id, // Use the UUID from User table
+          wallet: subscriber.wallet,
+          agentId: agent.id,
+          isAgent: false,
+          side,
+          kind: 'market',
+          shares: userTradeShares,
+          price: tradePrice,
+          cost: userCost,
+          fee: userFee,
+          txSig: `agent_copy_${newId().slice(0, 10)}`,
+        },
+      });
+
+      // Update subscriber position
+      const existingPos = await prisma.position.findUnique({
+        where: {
+          marketId_userId: {
+            marketId: market.id,
+            userId: subscriber.id,
+          },
+        },
+      });
+
+      if (existingPos) {
+        if (side === 'YES') {
+          const newShares = existingPos.yesShares + userTradeShares;
+          const newAvg = parseFloat(((existingPos.avgYesCost * existingPos.yesShares + userCost) / newShares).toFixed(4));
+          await prisma.position.update({
+            where: { id: existingPos.id },
+            data: { yesShares: newShares, avgYesCost: newAvg },
+          });
+        } else {
+          const newShares = existingPos.noShares + userTradeShares;
+          const newAvg = parseFloat(((existingPos.avgNoCost * existingPos.noShares + userCost) / newShares).toFixed(4));
+          await prisma.position.update({
+            where: { id: existingPos.id },
+            data: { noShares: newShares, avgNoCost: newAvg },
+          });
+        }
+      } else {
+        await prisma.position.create({
+          data: {
+            id: newId(),
+            marketId: market.id,
+            userId: subscriber.id,
+            yesShares: side === 'YES' ? userTradeShares : 0,
+            noShares: side === 'NO' ? userTradeShares : 0,
+            avgYesCost: side === 'YES' ? tradePrice : 0,
+            avgNoCost: side === 'NO' ? tradePrice : 0,
+          },
+        });
+      }
+    }
+
     await prisma.agent.update({
       where: { id: agent.id },
       data: {
@@ -452,6 +535,10 @@ export async function runTradingAgents(): Promise<void> {
         pnl30d: Math.max(-50, Math.min(100, agent.pnl30d + (Math.random() - 0.38) * 0.4)),
       },
     });
+
+    // Refresh metrics
+    const { updateAgentStats } = await import('./performance');
+    await updateAgentStats(agent.id);
 
     console.log(`[TradingAgent] "${agent.handle}" (${agent.type}): ${side} ${shares}s @ ${(tradePrice * 100).toFixed(0)}¢ on "${market.question.slice(0, 45)}"`);
   } catch (e) {
@@ -496,7 +583,7 @@ It should reflect your persona.
 Respond ONLY with the comment text. No JSON, no quotes.`;
 
       const res = await callGemini(prompt);
-      const text = res.text().trim();
+      const text = res.text.trim();
 
       if (text && text.length > 5) {
         await prisma.comment.create({

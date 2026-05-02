@@ -8,11 +8,19 @@ const router = express.Router();
 // Get recent resolutions
 router.get('/recent', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const resolutions = await prisma.oracleResolution.findMany({
+    const resolutionsRaw = await prisma.oracleResolution.findMany({
       orderBy: { createdAt: 'desc' },
       take: 20,
       include: { market: true },
     });
+
+    const resolutions = resolutionsRaw.map(r => ({
+      ...r,
+      tally: r.tally ? JSON.parse(r.tally) : null,
+      votes: r.votes ? JSON.parse(r.votes) : [],
+      weightedConfidence: r.weightedConfidence ? JSON.parse(r.weightedConfidence) : null,
+    }));
+
     res.json({ resolutions });
     return;
   } catch (error) {
@@ -114,7 +122,7 @@ Respond ONLY with JSON: { "outcome": "YES"|"NO"|"INVALID", "confidence": "high"|
       agent: { id: a.id, handle: a.handle, wallet: a.wallet },
     }));
 
-    const resolution = await prisma.oracleResolution.upsert({
+    const resolutionRaw = await prisma.oracleResolution.upsert({
       where: { marketId },
       create: {
         id: newId(),
@@ -130,8 +138,25 @@ Respond ONLY with JSON: { "outcome": "YES"|"NO"|"INVALID", "confidence": "high"|
         reasoning,
         votes: JSON.stringify(voteRecords),
       },
-      update: { outcome: finalOutcome, reasoning, isDisputed },
+      update: { 
+        outcome: finalOutcome, 
+        reasoning, 
+        isDisputed,
+        consensus,
+        totalVotes: allVotes.length,
+        tally: JSON.stringify(tally),
+        weightedConfidence: JSON.stringify({ YES: (tally.YES || 0) * avgConf, NO: (tally.NO || 0) * avgConf, INVALID: 0 }),
+        averageConfidence: avgConf,
+        votes: JSON.stringify(voteRecords),
+      },
     });
+
+    const resolution = {
+      ...resolutionRaw,
+      tally: resolutionRaw.tally ? JSON.parse(resolutionRaw.tally) : null,
+      votes: resolutionRaw.votes ? JSON.parse(resolutionRaw.votes) : [],
+      weightedConfidence: resolutionRaw.weightedConfidence ? JSON.parse(resolutionRaw.weightedConfidence) : null,
+    };
 
     if (!isDisputed) {
       await prisma.market.update({
@@ -148,6 +173,41 @@ Respond ONLY with JSON: { "outcome": "YES"|"NO"|"INVALID", "confidence": "high"|
     console.error('[Oracle]', error);
     res.status(500).json({ error: 'Failed to resolve market' });
     return;
+  }
+});
+
+// Challenge a resolution
+router.post('/challenge/:marketId', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { marketId } = req.params;
+    const { reason = '' } = req.body as { reason?: string };
+    const xWallet = (req.headers['x-wallet'] as string) || `demo_${newId().slice(0, 8)}.sol`;
+
+    const resolution = await prisma.oracleResolution.findUnique({ where: { marketId } });
+    if (!resolution) {
+      res.status(404).json({ error: 'Resolution not found' });
+      return;
+    }
+
+    if (resolution.isDisputed) {
+      res.status(400).json({ error: 'Market already disputed' });
+      return;
+    }
+
+    // Update resolution and market status
+    await prisma.oracleResolution.update({
+      where: { marketId },
+      data: { isDisputed: true, reasoning: `${resolution.reasoning} | CHALLENGED by ${xWallet}: ${reason}` },
+    });
+
+    await prisma.market.update({
+      where: { id: marketId },
+      data: { status: 'disputed' },
+    });
+
+    res.json({ success: true, message: 'Challenge recorded' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to record challenge' });
   }
 });
 

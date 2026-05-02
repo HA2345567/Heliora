@@ -236,7 +236,7 @@ export const AGENTS: AgentProfile[] = [
     handle: "arc.agent.sol",
     type: "Arbitrage",
     description:
-      "Cross-venue spread capture across Heliora, Polymarket and tokenized Kalshi markets via Jupiter routing.",
+      "Cross-venue spread capture across Heliora, Polymarket and institutional liquidity sources via Jupiter routing.",
     pnl30d: 18.7,
     winRate: 78,
     sharpe: 3.9,

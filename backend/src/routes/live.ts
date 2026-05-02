@@ -65,7 +65,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       : sort === 'newest' ? { createdAt: 'desc' }
       : { volume: 'desc' };
 
-    const take = Math.min(parseInt(limit as string, 10), 100);
+    const take = Math.min(parseInt(limit as string, 10), 1000);
     const skip = parseInt(offset as string, 10);
 
     const [markets, total] = await Promise.all([

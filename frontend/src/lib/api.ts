@@ -27,7 +27,7 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     // Backend unreachable — Neon/Express not deployed yet. Surface a friendly error
     // so React Query can render an empty state instead of a stack trace.
-    throw new Error("Heliora backend offline. Deploy backend/ or use /live for Kalshi data.");
+    throw new Error("Heliora backend offline. Deploy backend/ or use /live for institutional market data.");
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -84,6 +84,7 @@ export const api = {
     side: Side;
     kind?: TradeKind;
     shares: number;
+    isSell?: boolean;
     txSig?: string;
   }) => req<{ trade: ApiTrade }>("/api/trades", { method: "POST", body: JSON.stringify(body) }),
   recentTrades: (marketId: string) =>
@@ -114,7 +115,7 @@ export const api = {
       body: JSON.stringify({ capital }),
     }),
 
-  // Live Markets (Kalshi)
+  // Live Markets (Institutional)
   liveMarkets: (params?: {
     status?: "open" | "closed" | "settled" | "active" | "all";
     limit?: number;
@@ -143,6 +144,11 @@ export const api = {
     req<{ resolution: ApiOracleResolution }>(`/api/oracle/resolve/${marketId}`, {
       method: "POST",
       body: JSON.stringify({ context }),
+    }),
+  challengeResolution: (marketId: string, reason: string) =>
+    req<{ success: boolean }>(`/api/oracle/challenge/${marketId}`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
     }),
 
   // Stats
@@ -178,7 +184,7 @@ export function formatNum(n: number | undefined | null) {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return `${n}`;
 }
-export function timeUntil(iso: string): string {
+export function timeUntil(iso: string, p0?: boolean): string {
   const diff = new Date(iso).getTime() - Date.now();
   if (diff <= 0) return "ended";
   const m = Math.floor(diff / 60000);

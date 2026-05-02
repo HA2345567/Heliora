@@ -35,9 +35,22 @@ function mapKalshiCategory(category: string): string {
   return 'Other'; // default
 }
 
+function getCategoryImage(category: string): string {
+  const images: Record<string, string> = {
+    'Crypto': 'https://images.unsplash.com/photo-1518546305927-5a555bb7020d?auto=format&fit=crop&q=80&w=800',
+    'Politics': 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&q=80&w=800',
+    'Sports': 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&q=80&w=800',
+    'AI': 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=800',
+    'Economy': 'https://images.unsplash.com/photo-1611974717537-43a9f0203f1a?auto=format&fit=crop&q=80&w=800',
+    'Culture': 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&q=80&w=800',
+    'Other': 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=800',
+  };
+  return images[category] || images['Other'];
+}
+
 export async function syncKalshiMarkets(): Promise<number> {
   console.log('[MarketDataService] Syncing live Kalshi markets (High Capacity)...');
-  const raw = await fetchKalshiMarkets(500);
+  const raw = await fetchKalshiMarkets(2000);
   if (raw.length === 0) {
     console.log('[MarketDataService] No Kalshi markets returned, using fallback.');
     return 0;
@@ -111,6 +124,7 @@ export async function syncKalshiMarkets(): Promise<number> {
             participants: Math.floor(volume / 10) + Math.floor(Math.random() * 50),
             isLive: true,
             creator: JSON.stringify({ wallet: 'kalshi_bridge.sol', handle: 'Kalshi' }),
+            imageUrl: getCategoryImage(category),
           },
         });
 
@@ -147,6 +161,7 @@ export const FALLBACK_MARKETS = [
     volume: 1200000,
     participants: 9500,
     daysFromNow: 2,
+    imageUrl: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will Royal Challengers Bengaluru (RCB) qualify for the IPL Playoffs?',
@@ -156,6 +171,7 @@ export const FALLBACK_MARKETS = [
     volume: 2400000,
     participants: 18000,
     daysFromNow: 15,
+    imageUrl: 'https://images.unsplash.com/photo-1624555130581-1d9cca783bc0?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will Narendra Modi win a majority in the next General Election?',
@@ -165,6 +181,7 @@ export const FALLBACK_MARKETS = [
     volume: 5500000,
     participants: 45000,
     daysFromNow: 300,
+    imageUrl: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will Bitcoin (BTC) exceed $100,000 before July 2026?',
@@ -174,6 +191,7 @@ export const FALLBACK_MARKETS = [
     volume: 850000,
     participants: 4200,
     daysFromNow: 60,
+    imageUrl: 'https://images.unsplash.com/photo-1518546305927-5a555bb7020d?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will Ethereum hit $5,000 by Q3 2026?',
@@ -183,6 +201,7 @@ export const FALLBACK_MARKETS = [
     volume: 430000,
     participants: 2100,
     daysFromNow: 90,
+    imageUrl: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will the Federal Reserve cut rates in June 2026?',
@@ -192,6 +211,7 @@ export const FALLBACK_MARKETS = [
     volume: 1200000,
     participants: 8500,
     daysFromNow: 45,
+    imageUrl: 'https://images.unsplash.com/photo-1611974717537-43a9f0203f1a?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will OpenAI release GPT-5 before September 2026?',
@@ -201,6 +221,7 @@ export const FALLBACK_MARKETS = [
     volume: 620000,
     participants: 3800,
     daysFromNow: 120,
+    imageUrl: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will Solana (SOL) reach $500 in 2026?',
@@ -210,6 +231,7 @@ export const FALLBACK_MARKETS = [
     volume: 310000,
     participants: 1900,
     daysFromNow: 180,
+    imageUrl: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will Apple release an AI-native iPhone before 2027?',
@@ -219,6 +241,7 @@ export const FALLBACK_MARKETS = [
     volume: 540000,
     participants: 6100,
     daysFromNow: 200,
+    imageUrl: 'https://images.unsplash.com/photo-1616348436168-de43ad0db179?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will Dogecoin reach $1.00 before the end of 2026?',
@@ -228,6 +251,7 @@ export const FALLBACK_MARKETS = [
     volume: 195000,
     participants: 1400,
     daysFromNow: 240,
+    imageUrl: 'https://images.unsplash.com/photo-1622790694515-6d629f37c547?auto=format&fit=crop&q=80&w=800',
   },
   {
     question: 'Will SpaceX land humans on Mars before 2030?',
@@ -237,6 +261,7 @@ export const FALLBACK_MARKETS = [
     volume: 780000,
     participants: 5200,
     daysFromNow: 365,
+    imageUrl: 'https://images.unsplash.com/photo-1614728263952-84ea256f9679?auto=format&fit=crop&q=80&w=800',
   },
 ];
 
@@ -266,6 +291,7 @@ export async function seedFallbackMarkets(): Promise<void> {
         participants: m.participants,
         isLive: true,
         creator: JSON.stringify({ wallet: 'heliora_system.sol', handle: 'Heliora' }),
+        imageUrl: m.imageUrl,
       },
     });
 

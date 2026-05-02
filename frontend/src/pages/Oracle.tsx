@@ -3,7 +3,7 @@ import { useState } from "react";
 import { PageShell } from "@/components/layout/PageShell";
 import { api } from "@/lib/api";
 import type { ApiOracleResolution } from "@/lib/api-types";
-import { Brain, CheckCircle2, ChevronDown, Clock, Cpu, Loader2, Network, Scale, Search, ShieldCheck, Sparkles, Vote, Zap } from "lucide-react";
+import { AlertCircle, Brain, CheckCircle2, ChevronDown, Clock, Cpu, Loader2, Network, Scale, Search, ShieldCheck, Sparkles, Vote, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -421,6 +421,10 @@ function TriggerResolutionPanel() {
                     </div>
                   ))}
                 </div>
+
+                {!resolution.isDisputed && (
+                  <ChallengeButton marketId={resolution.marketId} />
+                )}
               </div>
             </div>
           )}
@@ -429,6 +433,34 @@ function TriggerResolutionPanel() {
     </div>
   );
 }
+
+function ChallengeButton({ marketId }: { marketId: string }) {
+  const qc = useQueryClient();
+  const challengeMut = useMutation({
+    mutationFn: (reason: string) => api.challengeResolution(marketId, reason),
+    onSuccess: () => {
+      toast.success("Challenge recorded. Market status updated to DISPUTED.");
+      qc.invalidateQueries({ queryKey: ["oracle", "recent"] });
+    },
+  });
+
+  const handleChallenge = () => {
+    const reason = window.prompt("Enter reason for challenge (e.g. 'Outcome criteria not met'):");
+    if (reason) challengeMut.mutate(reason);
+  };
+
+  return (
+    <button 
+      onClick={handleChallenge}
+      disabled={challengeMut.isPending}
+      className="mt-5 w-full flex items-center justify-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 py-2.5 text-xs font-semibold text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
+    >
+      {challengeMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertCircle className="h-3 w-3" />}
+      Challenge Verdict
+    </button>
+  );
+}
+
 function ConsensusDots({ agents, consensus, outcome }: { agents: number; consensus: number; outcome: "YES" | "NO" }) {
   const color = outcome === "YES" ? "bg-success" : "bg-destructive";
   return (

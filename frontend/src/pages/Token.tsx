@@ -21,7 +21,7 @@ export default function Token() {
             Own a piece of the protocol.
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-muted-foreground">
-            CFTC regulation prevents Kalshi from issuing equity-like tokens.
+            CFTC regulation prevents centralized exchanges from issuing equity-like tokens.
             PREDICT captures protocol fee revenue, gates oracle participation,
             and governs every parameter.
           </p>

@@ -10,6 +10,7 @@ import MarketDetail from "./pages/MarketDetail.tsx";
 import CreateMarket from "./pages/CreateMarket.tsx";
 import Portfolio from "./pages/Portfolio.tsx";
 import Agents from "./pages/Agents.tsx";
+import AgentDetail from "./pages/AgentDetail.tsx";
 import Oracle from "./pages/Oracle.tsx";
 import Developers from "./pages/Developers.tsx";
 import Token from "./pages/Token.tsx";
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/markets/:id" element={<MarketDetail />} />
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/agents" element={<Agents />} />
+            <Route path="/agents/:id" element={<AgentDetail />} />
             <Route path="/oracle" element={<Oracle />} />
             <Route path="/developers" element={<Developers />} />
             <Route path="/token" element={<Token />} />

@@ -10,10 +10,10 @@ Heliora is a next-generation prediction market platform that combines the speed 
 
 - **⚡ Blazing Fast On-Chain Settlement:** Built on Solana using the Anchor framework, ensuring sub-second trades and minimal transaction fees.
 - **🤖 Multi-Agent AI Architecture:** 
-  - **Market Creator:** Automatically curates and deploys new markets based on real-time news and Kalshi data streams.
+  - **Market Creator:** Automatically curates and deploys new markets based on real-time news and institutional data streams.
   - **Market Maker:** Ensures continuous liquidity, dynamic repricing, and tight spreads.
   - **Sentiment & Arbitrage Bots:** Simulates organic market activity and exploits inefficiencies to keep prices accurate.
-- **🌐 Real-Time Data Bridge:** Integrates live data from Kalshi and other high-fidelity sources, maintaining over 2,000+ active markets including the IPL, US Elections, and Crypto milestones.
+- **🌐 Real-Time Data Bridge:** Integrates live data from institutional and other high-fidelity sources, maintaining over 2,000+ active markets including the IPL, US Elections, and Crypto milestones.
 - **🎨 Premium UI/UX:** A stunning, modern web interface featuring smooth micro-animations, dynamic orderbooks, and interactive charting.
 - **🔔 Social & Tracking:** Personalized watchlists, real-time alerts, and native Web Share API capabilities.
 
@@ -55,7 +55,7 @@ anchor deploy
 
 ### 3. Backend Setup
 
-The backend powers the AI agents, the Prisma database, and the Kalshi market bridge.
+The backend powers the AI agents, the Prisma database, and the institutional market bridge.
 
 ```bash
 cd backend

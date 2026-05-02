@@ -80,6 +80,7 @@ model Market {
   watchlist         Watchlist[]
   alerts            Alert[]
   oracleResolution  OracleResolution?
+  imageUrl          String?
 
   @@index([status])
   @@index([endsAt])

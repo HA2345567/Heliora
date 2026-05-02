@@ -109,7 +109,7 @@ export function Header() {
                 to="/markets/create"
                 className="rounded-md bg-foreground px-3 py-2 text-center text-sm font-semibold text-background"
               >
-                Launch
+                Launch App
               </Link>
             </div>
           </nav>
