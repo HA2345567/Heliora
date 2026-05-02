@@ -10,18 +10,24 @@ export const Logo = forwardRef<SVGSVGElement, SVGProps<SVGSVGElement>>(
   ({ className, ...props }, ref) => (
     <svg
       ref={ref}
-      viewBox="0 0 32 32"
+      viewBox="0 0 100 60"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={cn("text-foreground", className)}
       aria-hidden
       {...props}
     >
-      <rect x="0.5" y="0.5" width="31" height="31" rx="8" stroke="currentColor" strokeOpacity="0.18" />
-      <circle cx="16" cy="16" r="9.25" stroke="currentColor" strokeOpacity="0.55" strokeWidth="1.25" />
-      <circle cx="16" cy="16" r="5.25" stroke="currentColor" strokeOpacity="0.85" strokeWidth="1.25" />
-      <circle cx="16" cy="16" r="2.25" fill="currentColor" />
-      <circle cx="24.5" cy="7.5" r="1.75" fill="hsl(var(--sol-green))" />
+      {/* Precision Geometric H Mark */}
+      <path 
+        d="
+          M 38 26 h 24 v 8 h -24 Z
+          M 36 26 L 18 26 L 8 16 L 26 16 Z
+          M 36 34 L 18 34 L 8 44 L 26 44 Z
+          M 64 26 L 82 26 L 92 16 L 74 16 Z
+          M 64 34 L 82 34 L 92 44 L 74 44 Z
+        " 
+        fill="currentColor" 
+      />
     </svg>
   ),
 );
