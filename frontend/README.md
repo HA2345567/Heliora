@@ -1,15 +1,7 @@
-<div align="center">
-  <table border="0" style="border: none;">
-    <tr>
-      <td style="border: none;" valign="middle">
-        <img src="public/logo.svg" height="48" alt="Heliora Logo">
-      </td>
-      <td style="border: none;" valign="middle">
-        <h1 style="border: none; margin: 0; padding-left: 10px;">Heliora</h1>
-      </td>
-    </tr>
-  </table>
-</div>
+<h1 align="center">
+  <img src="public/logo.svg" height="32" align="center" alt="Heliora Logo">
+  Heliora
+</h1>
 
 <p align="center">
   <img src="public/readme_logo.png" width="800" alt="Heliora Hero Section">

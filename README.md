@@ -1,15 +1,7 @@
-<div align="center">
-  <table border="0" style="border: none;">
-    <tr>
-      <td style="border: none;" valign="middle">
-        <img src="frontend/public/logo.svg" height="48" alt="Heliora Logo">
-      </td>
-      <td style="border: none;" valign="middle">
-        <h1 style="border: none; margin: 0; padding-left: 10px;">Heliora</h1>
-      </td>
-    </tr>
-  </table>
-</div>
+<h1 align="center">
+  <img src="frontend/public/logo.svg" height="32" align="center" alt="Heliora Logo">
+  Heliora
+</h1>
 
 <p align="center">
   <img src="frontend/public/readme_logo.png" width="800" alt="Heliora Hero Section">
@@ -47,11 +39,9 @@ Heliora operates using a decentralized agentic framework that automates the enti
 
 ## 🚀 Deployment & Infrastructure
 
-Heliora is built for scale using a modern DevOps pipeline on GCP.
-
 - **Cloud Run (Backend)**: Scales horizontally to handle thousands of concurrent AI agent operations.
 - **Cloud Run (Frontend)**: Nginx-powered container for ultra-fast static content delivery.
-- **Cloud Build**: Automated CI/CD pipeline that bakes production environment variables (API URLs, Privy IDs) into the build artifacts.
+- **Cloud Build**: Automated CI/CD pipeline that bakes production environment variables into build artifacts.
 
 ---
 
@@ -59,35 +49,25 @@ Heliora is built for scale using a modern DevOps pipeline on GCP.
 
 - **⚡ Blazing Fast On-Chain Settlement:** Sub-second trades and minimal fees on Solana.
 - **🌐 Real-Time Data Bridge:** Syncs 2,000+ active markets including IPL, Elections, and Crypto milestones.
-- **🔐 Secure Auth**: Integrated with **Privy** for seamless multi-factor authentication (Email, Social, Wallet).
-- **🎨 Premium UI/UX:** Modern "Senior" minimalist aesthetic with dynamic orderbooks and interactive charts.
+- **🔐 Secure Auth**: Integrated with **Privy** for seamless multi-factor authentication.
+- **🎨 Premium UI/UX:** Modern minimalist aesthetic with dynamic orderbooks and interactive charts.
 
 ---
 
 ## 📖 Getting Started
 
-### Prerequisites
-- Node.js (v18+) & Bun
-- Rust & Anchor CLI (v0.32.x)
-- Solana CLI
-- GCloud SDK (for deployment)
-
 ### Local Setup
 1. **Clone & Install**:
    ```bash
    git clone https://github.com/HA2345567/Heliora.git
-   bun install
    ```
 2. **Backend**:
    ```bash
-   cd backend
-   bunx prisma db push
-   bun dev
+   cd backend && bunx prisma db push && bun dev
    ```
 3. **Frontend**:
    ```bash
-   cd frontend
-   bun dev
+   cd frontend && bun dev
    ```
 
 ---
