@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="frontend/public/logo.svg" width="60" alt="Heliora Icon">
-  <br />
-  <b style="font-size: 2em;">Heliora</b>
-</p>
+<h1 align="center">
+  <img src="frontend/public/logo.svg" width="60" style="vertical-align: middle;"> Heliora
+</h1>
 
 <p align="center">
   <img src="frontend/public/readme_logo.png" width="800" alt="Heliora Hero Section">
