@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="public/logo.svg" width="60" style="vertical-align: middle;"> Heliora
+  <img src="public/logo.svg" width="60" align="middle"> Heliora
 </h1>
 
 <p align="center">
