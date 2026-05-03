@@ -1,0 +1,23 @@
+# Use the official Bun image
+FROM oven/bun:latest
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json bun.lock ./
+
+# Install dependencies
+RUN bun install --frozen-lockfile
+
+# Copy the rest of the code
+COPY . .
+
+# Generate Prisma client
+RUN bun x prisma generate
+
+# Expose the port (GCP Cloud Run uses 8080 by default, but we can configure it)
+EXPOSE 3000
+
+# Start the application
+CMD ["bun", "run", "src/index.ts"]

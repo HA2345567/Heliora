@@ -1,0 +1,11 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '--build-arg', 'VITE_API_URL=https://heliora-backend-40377961468.asia-east1.run.app',
+    '--build-arg', 'VITE_PRIVY_APP_ID=cmooj9sxq009x0djo8i0uld15',
+    '-t', 'gcr.io/oneclaw-486705/heliora-frontend',
+    '.'
+  ]
+images:
+- 'gcr.io/oneclaw-486705/heliora-frontend'

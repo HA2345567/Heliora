@@ -20,7 +20,11 @@ const PORT = process.env.PORT || 3000;
 const wss = new WebSocketServer({ server: httpServer });
 
 // Middleware
-app.use(cors());
+const corsOrigin = (process.env.CORS_ORIGIN || '*').replace(/\/$/, '');
+app.use(cors({
+  origin: corsOrigin === '*' ? '*' : corsOrigin,
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -72,7 +76,7 @@ const startServer = async () => {
     await prisma.$connect();
     console.log('✓ Database connected successfully');
 
-    httpServer.listen(PORT, () => {
+    httpServer.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`✓ Server running on http://localhost:${PORT}`);
       console.log(`✓ WebSocket available at ws://localhost:${PORT}/ws/:marketId`);
       console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
