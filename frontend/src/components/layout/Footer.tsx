@@ -47,7 +47,7 @@ export function Footer() {
         <div className="grid gap-12 md:grid-cols-6">
           <div className="md:col-span-2">
             <Link to="/" className="flex items-center gap-2.5">
-              <Logo className="h-8 w-8" />
+              <Logo className="h-8 w-14" />
               <span className="font-display text-xl">Heliora</span>
             </Link>
             <p className="mt-4 max-w-xs text-sm text-muted-foreground">

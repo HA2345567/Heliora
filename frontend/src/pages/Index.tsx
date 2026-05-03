@@ -120,7 +120,7 @@ export default function Landing() {
             <div className="relative overflow-hidden rounded-[1.5rem] border border-border/60 bg-surface/20 shadow-ring-strong backdrop-blur-sm">
               <div className="relative w-full">
                 <img 
-                  src="/Screenshot 2026-04-30 154835.png" 
+                  src="/sol_prediction_cex_pic_herosection.png" 
                   alt="Heliora Platform Demo" 
                   className="block h-auto w-full transition-transform duration-700 hover:scale-[1.01]"
                 />

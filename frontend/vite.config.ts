@@ -49,7 +49,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ["react-is", "recharts"],
+      include: ["react-is", "recharts", "react-dom", "@tanstack/react-query"],
     },
     resolve: {
       alias: {

@@ -49,6 +49,7 @@ model User {
   comments  Comment[]
   watchlist Watchlist[]
   alerts    Alert[]
+  subscriptions Subscription[]
 
   @@map("users")
 }
@@ -154,6 +155,7 @@ model Subscription {
   agentId   String
   agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
   userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   capital   Float
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

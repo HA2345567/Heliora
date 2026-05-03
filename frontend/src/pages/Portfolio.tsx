@@ -3,7 +3,7 @@ import { useHelioraWallet } from "@/components/wallet/useHelioraWallet";
 import { PageShell } from "@/components/layout/PageShell";
 import { api, formatUsd, timeUntil } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { ArrowDownRight, ArrowUpRight, Coins, ExternalLink, Sparkles, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Bot, Coins, ExternalLink, Sparkles, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RedeemButton } from "@/components/RedeemButton";
 
@@ -242,7 +242,7 @@ export default function Portfolio() {
                 <div>
                   <div className="text-sm">
                     <span className="font-medium">{a.side === "YES" ? "Bought YES" : "Bought NO"}</span>{" "}
-                    <span className="text-muted-foreground">· {a.marketQuestion}</span>
+                    <span className="text-muted-foreground">· {a.question}</span>
                   </div>
                   <div className="mt-1 font-mono text-[11px] text-muted-foreground">
                     {new Date(a.createdAt).toLocaleString()} · ${a.cost.toFixed(2)} @ {a.price.toFixed(3)}
@@ -251,7 +251,7 @@ export default function Portfolio() {
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
             ))}
-            {!data?.trades?.length && (
+            {!data?.recentTrades?.length && (
               <div className="px-5 py-10 text-center text-sm text-muted-foreground">No activity yet</div>
             )}
           </div>

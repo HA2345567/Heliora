@@ -93,9 +93,22 @@ export const api = {
   // Portfolio
   portfolio: () =>
     req<{
-      summary: { openValue: number; unrealized: number; realized: number; positions: number };
-      positions: ApiPosition[];
-      trades: (ApiTrade & { market: { question: string; category: MarketCategory } })[];
+      wallet: string;
+      handle: string | null;
+      unrealizedPnl: number;
+      realizedPnl: number;
+      positions: (ApiPosition & { currentValue: number })[];
+      recentTrades: (ApiTrade & { question: string; cost: number })[];
+      subscriptions: {
+        id: string;
+        agentId: string;
+        agentName: string;
+        agentHandle: string;
+        agentType: string;
+        capital: number;
+        pnl: number;
+        createdAt: string;
+      }[];
     }>("/api/portfolio"),
 
   // Agents
@@ -169,6 +182,11 @@ export const api = {
     req<{ alert: unknown }>("/api/social/alerts", { method: "POST", body: JSON.stringify(body) }),
   getAlerts: () => req<{ alerts: unknown[] }>("/api/social/alerts"),
   deleteAlert: (id: string) => req<{ success: boolean }>(`/api/social/alerts/${id}`, { method: "DELETE" }),
+  redeemMarket: (marketId: string, txSig: string) =>
+    req<{ success: boolean }>("/api/trades/redeem", {
+      method: "POST",
+      body: JSON.stringify({ marketId, txSig }),
+    }),
 };
 
 // Display helpers (kept here to avoid duplication across pages)

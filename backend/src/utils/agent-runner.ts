@@ -54,7 +54,7 @@ export async function runMarketCreatorAgent(): Promise<void> {
     return;
   }
 
-  for (const km of kalshiMarkets.slice(0, 5)) {
+  for (const km of kalshiMarkets.slice(0, 15)) {
     const ticker: string = km.ticker ?? km.market_id ?? '';
     const question: string = km.title ?? '';
     const closeTime: string = km.close_time ?? km.expiration_time ?? '';
@@ -75,29 +75,32 @@ export async function runMarketCreatorAgent(): Promise<void> {
     let shouldMirror = true;
     let odds = yesPrice;
 
-    // RULE: If the market has high volume (>10k), we strongly prefer mirroring it
-    const isHighVolume = (km.volume ?? 0) > 10000;
+    // RULE: If the market has decent volume (>1k), we strongly prefer mirroring it
+    const volume = km.volume ?? 0;
+    const isInteresting = volume > 1000 || (km.open_interest ?? 0) > 5000;
 
     if (geminiAvailable()) {
       try {
         const prompt = `You are a prediction market analyst AI agent on Solana.
-
-Market to evaluate:
+        
+Market to evaluate from Kalshi:
 - Title: "${question}"
 - Current YES probability: ${(yesPrice * 100).toFixed(0)}%
 - Closes: ${endsAt.toDateString()}
 - Category: ${km.category ?? 'Unknown'}
-- Volume: $${(km.volume ?? 0).toLocaleString()}
+- Volume: $${volume.toLocaleString()}
 
-Decide if this market should be mirrored on-chain. Consider: clarity, verifiability, and public interest.
-${isHighVolume ? 'Note: This market has high trading volume, so we should try to include it unless it is clearly broken.' : ''}
+These markets are from Kalshi, a regulated exchange, so they are generally well-defined and verifiable.
+Decide if this market should be mirrored on-chain. We want high-interest, clear, and engaging markets.
 Respond ONLY with JSON: { "mirror": true|false, "odds": <float 0.01-0.99>, "reason": "<one sentence>" }`;
 
         const r = await callGemini(prompt); // throttled
         const parsed = r.json<{ mirror: boolean; odds: number; reason: string }>();
         if (parsed) {
-          // If high volume, we might override a "false" mirror if the reason is just "ambiguity"
-          shouldMirror = parsed.mirror || (isHighVolume && !parsed.reason.toLowerCase().includes('broken'));
+          // Be more aggressive: mirror if Gemini says true OR if it has significant volume/interest
+          // unless Gemini explicitly flags it as "broken" or "offensive"
+          const isFlagged = parsed.reason.toLowerCase().includes('broken') || parsed.reason.toLowerCase().includes('offensive');
+          shouldMirror = parsed.mirror || (isInteresting && !isFlagged);
           odds = Math.max(0.02, Math.min(0.98, parsed.odds || yesPrice));
           console.log(`[CreatorAgent] Gemini: mirror=${shouldMirror} (Gemini said ${parsed.mirror}) — ${parsed.reason}`);
         }

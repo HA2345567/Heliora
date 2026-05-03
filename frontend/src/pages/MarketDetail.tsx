@@ -737,8 +737,8 @@ export default function MarketDetail() {
                 <div className="p-5">
                   {tab === "orderbook" && (
                     <div className="grid gap-5 lg:grid-cols-2">
-                      <DepthBook side="YES" rows={wsOrderbook?.buyYes ?? orderbook.yes} mid={livePrice} />
-                      <DepthBook side="NO" rows={wsOrderbook?.sellYes ?? orderbook.no} mid={1 - livePrice} />
+                      <DepthBook side="YES" rows={wsOrderbook?.yes ?? orderbook.yes} mid={livePrice} />
+                      <DepthBook side="NO" rows={wsOrderbook?.no ?? orderbook.no} mid={1 - livePrice} />
                     </div>
                   )}
                   {tab === "activity" && <ActivityFeed trades={data?.recentTrades ?? []} />}
@@ -980,10 +980,8 @@ export default function MarketDetail() {
 /* ============================== Polymarket-style Line Chart + Volume Bars ============================== */
 
 function PolymarketChart({ pricePoints, live, range }: { pricePoints: ApiPricePoint[]; live: number; range: Range }) {
-  const isGreen = live >= 0.5;
-  const lineColor = isGreen ? "hsl(142 71% 45%)" : "hsl(0 84% 60%)";
-  const gradientId = isGreen ? "poly-grad-green" : "poly-grad-red";
-  const volGradientId = isGreen ? "vol-grad-green" : "vol-grad-red";
+  const yesColor = "hsl(142 71% 45%)";
+  const noColor = "hsl(0 84% 60%)";
 
   const filtered = filterPointsByRange(pricePoints, range);
   const chartData = useMemo(() => {
@@ -993,7 +991,8 @@ function PolymarketChart({ pricePoints, live, range }: { pricePoints: ApiPricePo
       const delta = prev ? Math.abs(p.yesPrice - prev.yesPrice) : 0.008;
       const vol = Math.round(delta * 60000 + Math.random() * 4000 + 1500);
       return {
-        value: +(p.yesPrice * 100).toFixed(1),
+        yes: +(p.yesPrice * 100).toFixed(1),
+        no: +((1 - p.yesPrice) * 100).toFixed(1),
         volume: vol,
         label: formatChartLabel(p.ts, range),
         ts: p.ts,
@@ -1004,29 +1003,44 @@ function PolymarketChart({ pricePoints, live, range }: { pricePoints: ApiPricePo
 
   // Inject live price at the end
   const fullData = useMemo(() => {
-    if (!chartData.length) return [{ value: +(live * 100).toFixed(1), volume: 2000, label: "Now", ts: new Date().toISOString() }];
+    const liveYes = +(live * 100).toFixed(1);
+    const liveNo = +(100 - liveYes).toFixed(1);
+    if (!chartData.length) return [{ yes: liveYes, no: liveNo, volume: 2000, label: "Now", ts: new Date().toISOString() }];
     const copy = [...chartData];
-    copy[copy.length - 1] = { ...copy[copy.length - 1], value: +(live * 100).toFixed(1) };
+    copy[copy.length - 1] = { ...copy[copy.length - 1], yes: liveYes, no: liveNo };
     return copy;
   }, [chartData, live]);
 
-  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number; dataKey: string }[]; label?: string }) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
     if (!active || !payload?.length) return null;
-    const pricePayload = payload.find((p) => p.dataKey === "value");
-    const volPayload = payload.find((p) => p.dataKey === "volume");
+    const yesVal = payload.find((p) => p.dataKey === "yes")?.value;
+    const noVal = payload.find((p) => p.dataKey === "no")?.value;
+    const volVal = payload.find((p) => p.dataKey === "volume")?.value;
+    
     return (
       <div className="rounded-lg border border-border bg-background/95 px-3 py-2.5 shadow-ring backdrop-blur">
-        <div className="font-mono text-[10px] text-muted-foreground">{label}</div>
-        {pricePayload && (
-          <div className={cn("mt-0.5 font-display text-xl tabular-nums", isGreen ? "text-success" : "text-destructive")}>
-            {pricePayload.value?.toFixed(1)}¢
+        <div className="font-mono text-[10px] text-muted-foreground mb-1">{label}</div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-success" />
+              <span className="text-[11px] font-medium text-muted-foreground">YES</span>
+            </div>
+            <span className="font-display text-base font-semibold text-success tabular-nums">{yesVal?.toFixed(1)}¢</span>
           </div>
-        )}
-        {volPayload && (
-          <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-            Vol <span className="text-foreground/70">{(volPayload.value / 1000).toFixed(1)}K</span>
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-destructive" />
+              <span className="text-[11px] font-medium text-muted-foreground">NO</span>
+            </div>
+            <span className="font-display text-base font-semibold text-destructive tabular-nums">{noVal?.toFixed(1)}¢</span>
           </div>
-        )}
+          {volVal && (
+            <div className="mt-1 pt-1 border-t border-border/40 font-mono text-[10px] text-muted-foreground">
+              Vol <span className="text-foreground/70">{(volVal / 1000).toFixed(1)}K</span>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1038,9 +1052,13 @@ function PolymarketChart({ pricePoints, live, range }: { pricePoints: ApiPricePo
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={fullData} margin={{ top: 16, right: 16, left: -8, bottom: 0 }} syncId="predchart">
             <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={lineColor} stopOpacity={0.22} />
-                <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
+              <linearGradient id="grad-yes" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={yesColor} stopOpacity={0.15} />
+                <stop offset="100%" stopColor={yesColor} stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="grad-no" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={noColor} stopOpacity={0.15} />
+                <stop offset="100%" stopColor={noColor} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 8" stroke="hsl(0 0% 100% / 0.05)" vertical={false} />
@@ -1073,12 +1091,22 @@ function PolymarketChart({ pricePoints, live, range }: { pricePoints: ApiPricePo
             />
             <Area
               type="monotone"
-              dataKey="value"
-              stroke={lineColor}
+              dataKey="yes"
+              stroke={yesColor}
               strokeWidth={2}
-              fill={`url(#${gradientId})`}
+              fill="url(#grad-yes)"
               dot={false}
-              activeDot={{ r: 4, strokeWidth: 0, fill: lineColor }}
+              activeDot={{ r: 4, strokeWidth: 0, fill: yesColor }}
+              isAnimationActive={false}
+            />
+            <Area
+              type="monotone"
+              dataKey="no"
+              stroke={noColor}
+              strokeWidth={2}
+              fill="url(#grad-no)"
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 0, fill: noColor }}
               isAnimationActive={false}
             />
           </AreaChart>
@@ -1090,17 +1118,17 @@ function PolymarketChart({ pricePoints, live, range }: { pricePoints: ApiPricePo
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={fullData} margin={{ top: 4, right: 16, left: -8, bottom: 0 }} syncId="predchart">
             <defs>
-              <linearGradient id={volGradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={lineColor} stopOpacity={0.55} />
-                <stop offset="100%" stopColor={lineColor} stopOpacity={0.15} />
+              <linearGradient id="grad-vol" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={yesColor} stopOpacity={0.4} />
+                <stop offset="100%" stopColor={yesColor} stopOpacity={0.1} />
               </linearGradient>
             </defs>
             <XAxis dataKey="label" hide />
             <YAxis hide domain={[0, "dataMax * 2.5"]} />
             <Tooltip content={() => null} cursor={{ fill: "hsl(0 0% 100% / 0.04)" }} />
-            <Bar dataKey="volume" fill={`url(#${volGradientId})`} radius={[1, 1, 0, 0]} isAnimationActive={false} maxBarSize={6}>
+            <Bar dataKey="volume" fill="url(#grad-vol)" radius={[1, 1, 0, 0]} isAnimationActive={false} maxBarSize={6}>
               {fullData.map((_, i) => (
-                <Cell key={i} fill={`url(#${volGradientId})`} />
+                <Cell key={i} fill="url(#grad-vol)" />
               ))}
             </Bar>
           </BarChart>
@@ -1151,7 +1179,7 @@ function CandleChart({ candles, live }: { candles: Candle[]; live: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const H = 340, PAD = 20;
-  const W = 800 * zoom;
+  const W = 1200 * zoom;
   const cw = (W - PAD * 2) / Math.max(1, candles.length);
 
   // Auto-scale Y-axis
@@ -1215,10 +1243,10 @@ function CandleChart({ candles, live }: { candles: Candle[]; live: number }) {
             const color = up ? "hsl(142 71% 45%)" : "hsl(0 84% 60%)";
             const bodyTop = Math.min(yO, yC);
             const bodyH = Math.max(4, Math.abs(yO - yC));
-            const bw = Math.max(3, cw * 0.7);
+            const bw = Math.max(5, cw * 0.8);
             return (
               <g key={i}>
-                <line x1={x} x2={x} y1={yH} y2={yL} stroke={color} strokeWidth="1.5" opacity="0.85" />
+                <line x1={x} x2={x} y1={yH} y2={yL} stroke={color} strokeWidth="2" opacity="0.85" />
                 <rect x={x - bw / 2} y={bodyTop} width={bw} height={bodyH} fill={color} opacity={up ? 0.9 : 0.85} rx="1" />
               </g>
             );

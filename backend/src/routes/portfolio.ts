@@ -88,6 +88,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         side: t.side,
         shares: t.shares,
         price: t.price,
+        cost: t.cost,
         isSell: t.isSell,
         createdAt: t.createdAt,
       })),
@@ -103,9 +104,13 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       })),
     });
     return;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching portfolio:', error);
-    res.status(500).json({ error: 'Failed to fetch portfolio' });
+    res.status(500).json({ 
+      error: 'Failed to fetch portfolio',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
     return;
   }
 });

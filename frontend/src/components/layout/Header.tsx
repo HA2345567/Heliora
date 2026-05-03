@@ -29,11 +29,8 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-10">
           <Link to="/" className="flex items-center gap-3">
-            <Logo className="h-8 w-14" />
+            <Logo className="h-7 w-11" />
             <span className="font-display text-xl tracking-tight">Heliora</span>
-            <span className="hidden rounded-md border border-border bg-surface px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground sm:inline-block">
-              Beta
-            </span>
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {NAV.map((item) => (
