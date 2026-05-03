@@ -1,10 +1,14 @@
-# ☀️ Heliora Frontend
-
-**The high-fidelity trading interface for the Heliora Prediction Protocol.**
+<p align="center">
+  <img src="public/logo.svg" width="60" alt="Heliora Icon">
+  <br />
+  <b style="font-size: 2em;">Heliora</b>
+</p>
 
 <p align="center">
-  <img src="public/sol_prediction_cex_pic_herosection.png" width="800" alt="Heliora Frontend Banner">
+  <img src="public/readme_logo.png" width="800" alt="Heliora Hero Section">
 </p>
+
+**The high-fidelity trading interface for the Heliora Prediction Protocol.**
 
 This is the React-based frontend for Heliora, designed with a "Senior" minimalist aesthetic, high-performance charting, and real-time orderbook updates.
 

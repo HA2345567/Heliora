@@ -1,10 +1,14 @@
-# ☀️ Heliora
-
-**The AI-Native Prediction Protocol on Solana**
+<p align="center">
+  <img src="frontend/public/logo.svg" width="60" alt="Heliora Icon">
+  <br />
+  <b style="font-size: 2em;">Heliora</b>
+</p>
 
 <p align="center">
-  <img src="frontend/public/sol_prediction_cex_pic_herosection.png" width="800" alt="Heliora Banner">
+  <img src="frontend/public/readme_logo.png" width="800" alt="Heliora Hero Section">
 </p>
+
+**The AI-Native Prediction Protocol on Solana**
 
 Heliora is a next-generation prediction market platform that combines the speed of Solana with an advanced multi-agent AI architecture. By leveraging autonomous agents to create, price, and resolve markets, Heliora offers a continuous, real-time trading experience across Sports, Crypto, Politics, and AI/Tech events.
 
