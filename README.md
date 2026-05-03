@@ -15,6 +15,10 @@ Heliora is a next-generation prediction market platform that combines the speed 
 
 ## 🏗️ Architecture & System Design
 
+<p align="center">
+  <img src="frontend/public/architecture.png" width="800" alt="Heliora Architecture Diagram">
+</p>
+
 Heliora operates using a decentralized agentic framework that automates the entire lifecycle of a prediction market.
 
 ### 🤖 The 3-Agent Core
